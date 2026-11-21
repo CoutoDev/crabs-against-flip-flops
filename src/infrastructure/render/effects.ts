@@ -65,7 +65,7 @@ export class Effects {
         this.floaterList.push({
           text: String(event.milestone),
           x: FIELD_WIDTH_PX / 2,
-          y: 24,
+          y: 40,
           color: COLOR.sun,
           ttlMs: MILESTONE_TTL_MS,
           ageMs: 0,

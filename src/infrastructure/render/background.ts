@@ -58,8 +58,9 @@ const THEMES: Readonly<Record<Biome, BiomeTheme>> = {
   },
 };
 
-const HORIZON_Y = 44;
-const SEA_BOTTOM_Y = 66;
+// The sea ends above the crabs' lanes (data/levels.ts: laneY starts at 150), so the sand is playfield.
+const HORIZON_Y = 60;
+const SEA_BOTTOM_Y = 116;
 
 /** Deterministic noise in [0, 1): the same pixel always gets the same value. */
 function hash(x: number, y: number): number {
@@ -74,12 +75,12 @@ export function renderBackground(biome: Biome): Framebuffer {
   const fb = new Framebuffer(FIELD_WIDTH_PX, FIELD_HEIGHT_PX);
 
   fb.fillRect(0, 0, FIELD_WIDTH_PX, HORIZON_Y, theme.sky);
-  if (theme.sun !== undefined) fb.fillCircle(252, 22, 9, theme.sun);
+  if (theme.sun !== undefined) fb.fillCircle(FIELD_WIDTH_PX - 36, 28, 10, theme.sun);
 
   fb.fillRect(0, HORIZON_Y, FIELD_WIDTH_PX, SEA_BOTTOM_Y - HORIZON_Y, theme.sea);
   for (let x = 0; x < FIELD_WIDTH_PX; x += 1) {
     // Gentle wave crests and foam along the shoreline.
-    if (hash(x, 1) < 0.07) fb.setPixel(x, HORIZON_Y + 4 + Math.floor(hash(x, 2) * 10), theme.foam);
+    if (hash(x, 1) < 0.07) fb.setPixel(x, HORIZON_Y + 4 + Math.floor(hash(x, 2) * 40), theme.foam);
     if (Math.sin(x / 7) > 0.2) fb.setPixel(x, SEA_BOTTOM_Y - 1, theme.foam);
   }
   fb.fillRect(0, HORIZON_Y, FIELD_WIDTH_PX, 1, COLOR.ink);
@@ -96,8 +97,8 @@ export function renderBackground(biome: Biome): Framebuffer {
   fb.fillRect(0, SEA_BOTTOM_Y, FIELD_WIDTH_PX, 2, theme.groundDark);
 
   if (theme.palms) {
-    fb.blit(SPRITES.palm, 6, HORIZON_Y - 14);
-    fb.blit(SPRITES.palm, FIELD_WIDTH_PX - 6 - SPRITES.palm.width, HORIZON_Y - 8);
+    fb.blit(SPRITES.palm, 4, HORIZON_Y - 16);
+    fb.blit(SPRITES.palm, FIELD_WIDTH_PX - 4 - SPRITES.palm.width, HORIZON_Y - 8);
   }
   return fb;
 }

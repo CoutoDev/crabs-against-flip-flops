@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { CRAB_SPAWN_MARGIN_PX, FIELD_WIDTH_PX } from '../constants';
+
+const RIGHT_EDGE = FIELD_WIDTH_PX + CRAB_SPAWN_MARGIN_PX;
 import { makeCrab, makeLevel, sequenceRng } from '../test-support';
 import { isCrabGone, moveCrab, spawnCrab } from './crabs';
 
@@ -27,7 +30,7 @@ describe('spawnCrab', () => {
 
   it('spawns right-to-left from just outside the right edge', () => {
     const crab = spawnCrab(8, level, sequenceRng([0, 0, 0.9, 0]));
-    expect(crab).toMatchObject({ x: 336, y: 80, direction: -1, speedPxPerSec: 20 });
+    expect(crab).toMatchObject({ x: RIGHT_EDGE, y: 80, direction: -1, speedPxPerSec: 20 });
   });
 
   it('chooses the crab type by weight', () => {
@@ -69,18 +72,18 @@ describe('moveCrab', () => {
 
 describe('isCrabGone', () => {
   it('is false while a crab is on screen or still inside the margin', () => {
-    expect(isCrabGone(makeCrab({ x: 160 }))).toBe(false);
-    expect(isCrabGone(makeCrab({ x: 336, direction: 1 }))).toBe(false);
+    expect(isCrabGone(makeCrab({ x: FIELD_WIDTH_PX / 2 }))).toBe(false);
+    expect(isCrabGone(makeCrab({ x: RIGHT_EDGE, direction: 1 }))).toBe(false);
     expect(isCrabGone(makeCrab({ x: -16, direction: -1 }))).toBe(false);
   });
 
   it('is true once it walked past the margin on its exit side', () => {
-    expect(isCrabGone(makeCrab({ x: 336.01, direction: 1 }))).toBe(true);
+    expect(isCrabGone(makeCrab({ x: RIGHT_EDGE + 0.01, direction: 1 }))).toBe(true);
     expect(isCrabGone(makeCrab({ x: -16.01, direction: -1 }))).toBe(true);
   });
 
   it('does not remove a crab that has just spawned on the far side', () => {
     expect(isCrabGone(makeCrab({ x: -16, direction: 1 }))).toBe(false);
-    expect(isCrabGone(makeCrab({ x: 336, direction: -1 }))).toBe(false);
+    expect(isCrabGone(makeCrab({ x: RIGHT_EDGE, direction: -1 }))).toBe(false);
   });
 });

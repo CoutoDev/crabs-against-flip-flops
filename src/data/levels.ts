@@ -19,7 +19,7 @@ const LEVEL_1: LevelConfig = {
   spawn: {
     intervalMs: { min: 900, max: 1600 },
     maxOnScreen: 4,
-    laneY: { min: 80, max: 150 },
+    laneY: { min: 150, max: 270 },
   },
   crabs: [{ type: 'common', weight: 1, speedPxPerSec: { min: 20, max: 40 } }],
   throw: { speedPxPerSec: 240, minFlightMs: 350, maxFlightMs: 800, arcHeightPx: 40 },

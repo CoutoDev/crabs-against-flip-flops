@@ -41,10 +41,10 @@ describe('Scene', () => {
     scene.render(empty, { ...options, state: baseState() });
     scene.render(withCrab, {
       ...options,
-      state: withCrabs(baseState(), makeCrab({ x: 160, y: 110 })),
+      state: withCrabs(baseState(), makeCrab({ x: 90, y: 200 })),
     });
-    expect(withCrab.rgbAt(160, 110)).not.toEqual(empty.rgbAt(160, 110));
-    expect(withCrab.rgbAt(10, 110)).toEqual(empty.rgbAt(10, 110)); // far from the crab: untouched
+    expect(withCrab.rgbAt(90, 200)).not.toEqual(empty.rgbAt(90, 200));
+    expect(withCrab.rgbAt(10, 200)).toEqual(empty.rgbAt(10, 200)); // far from the crab: untouched
   });
 
   it('mirrors the crab when it walks the other way', () => {
@@ -52,7 +52,7 @@ describe('Scene', () => {
     const right = newFrame();
     const left = newFrame();
     const options = { effects: new Effects(), aim: undefined };
-    const crab = makeCrab({ x: 160, y: 110, type: 'fiddler' });
+    const crab = makeCrab({ x: 90, y: 200, type: 'fiddler' });
     scene.render(right, { ...options, state: withCrabs(baseState(), { ...crab, direction: 1 }) });
     scene.render(left, { ...options, state: withCrabs(baseState(), { ...crab, direction: -1 }) });
     expect(left.data).not.toEqual(right.data);
@@ -64,14 +64,14 @@ describe('Scene', () => {
     const shown = newFrame();
     const options = { effects: new Effects(), state: baseState() };
     scene.render(hidden, { ...options, aim: undefined });
-    scene.render(shown, { ...options, aim: { x: 160, y: 120 } });
+    scene.render(shown, { ...options, aim: { x: 90, y: 220 } });
     expect(shown.data).not.toEqual(hidden.data);
-    expect(shown.rgbAt(160, 120)).toEqual(PALETTE_RGB[COLOR.white]);
+    expect(shown.rgbAt(90, 220)).toEqual(PALETTE_RGB[COLOR.white]);
   });
 
   it('draws the flip flop in flight with the equipped skin colors', () => {
     const scene = new Scene();
-    const state = throwSlipper(baseState(), { x: 160, y: 100 }).state;
+    const state = throwSlipper(baseState(), { x: 90, y: 200 }).state;
     const advanced: RoundState = {
       ...state,
       flights: state.flights.map((f) => ({ ...f, elapsedMs: f.durationMs / 2 })),

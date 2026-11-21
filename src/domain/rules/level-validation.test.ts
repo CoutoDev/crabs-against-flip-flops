@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FIELD_HEIGHT_PX } from '../constants';
 import type { CrabType } from '../entities/crab';
 import type { LevelConfig } from '../entities/level';
 import { makeLevel, TEST_CRAB_SPECS } from '../test-support';
@@ -25,7 +26,7 @@ describe('validateLevel', () => {
     ],
     [
       'lane outside the field',
-      { spawn: { ...base.spawn, laneY: { min: 100, max: 200 } } },
+      { spawn: { ...base.spawn, laneY: { min: 100, max: FIELD_HEIGHT_PX + 1 } } },
       /spawn\.laneY/,
     ],
     ['zero on-screen cap', { spawn: { ...base.spawn, maxOnScreen: 0 } }, /spawn\.maxOnScreen/],
