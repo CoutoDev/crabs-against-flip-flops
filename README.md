@@ -4,7 +4,13 @@
 
 **PT-BR** — Minigame 8 bits de navegador: arremesse chinelos em caranguejos e siris que cruzam praias e manguezais, ganhe pontos, avance por níveis mais difíceis e gaste os pontos em skins de chinelo. Disponível em português (Brasil) e inglês. O progresso é salvo localmente no navegador (sem conta).
 
-> Status: **M1 (domain core)** — rules and simulation are implemented and tested, but there is no rendering yet: the game is not playable. / as regras e a simulação estão implementadas e testadas, mas ainda não há tela: o jogo ainda não é jogável.
+> Status: **M2 (first playable level)** — one level is playable end to end (mouse, touch and keyboard; English and Portuguese; sound effects). Campaign, shop and saved progress come next. / um nível já é jogável de ponta a ponta (mouse, toque e teclado; português e inglês; efeitos sonoros). Campanha, loja e progresso salvo vêm a seguir.
+
+## How to play / Como jogar
+
+**EN** — Click or tap the field to throw a flip flop there: it lands where you aimed, so lead the crabs. Consecutive hits build a combo multiplier; a miss resets it. Reach the goal score before you run out of flip flops. Keyboard: arrows or WASD aim (Shift = faster), Space or Enter throws, P or Esc pauses.
+
+**PT-BR** — Clique ou toque no campo para arremessar um chinelo ali: ele cai onde você mirou, então antecipe o caminho dos caranguejos. Acertos seguidos aumentam o multiplicador de combo; um erro zera. Alcance a meta de pontos antes de acabarem os chinelos. Teclado: setas ou WASD mira (Shift = mais rápido), Espaço ou Enter arremessa, P ou Esc pausa.
 
 ## Development / Desenvolvimento
 
