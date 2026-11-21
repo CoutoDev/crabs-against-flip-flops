@@ -17,6 +17,7 @@ export class WebAudioSfx {
   private noiseBuffer: AudioBuffer | undefined;
   private voices = 0;
   private isMuted = false;
+  private level = 1;
 
   constructor(private readonly createContext: () => AudioContext = () => new AudioContext()) {}
 
@@ -26,7 +27,25 @@ export class WebAudioSfx {
 
   setMuted(muted: boolean): void {
     this.isMuted = muted;
-    if (this.master !== undefined) this.master.gain.value = muted ? 0 : MASTER_VOLUME;
+    this.applyVolume();
+  }
+
+  /** Master volume for effects and music, 0..1. */
+  setVolume(volume: number): void {
+    this.level = Math.min(1, Math.max(0, volume));
+    this.applyVolume();
+  }
+
+  /** The context and master output, once a user gesture has created them (for the music). */
+  get graph(): { readonly context: AudioContext; readonly destination: AudioNode } | undefined {
+    if (this.context === undefined || this.master === undefined) return undefined;
+    return { context: this.context, destination: this.master };
+  }
+
+  private applyVolume(): void {
+    if (this.master !== undefined) {
+      this.master.gain.value = this.isMuted ? 0 : MASTER_VOLUME * this.level;
+    }
   }
 
   /** Creates the context on first use and resumes it. Safe to call on every user gesture. */
@@ -53,9 +72,9 @@ export class WebAudioSfx {
     if (this.context === undefined) {
       this.context = this.createContext();
       const master = this.context.createGain();
-      master.gain.value = this.isMuted ? 0 : MASTER_VOLUME;
-      master.connect(this.context.destination);
       this.master = master;
+      master.connect(this.context.destination);
+      this.applyVolume();
     }
     return this.context;
   }

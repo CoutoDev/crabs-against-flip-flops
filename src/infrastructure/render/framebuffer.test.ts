@@ -94,4 +94,37 @@ describe('Framebuffer.blit', () => {
     b.copyFrom(a);
     expect(b.rgbAt(2, 2)).toEqual(rgb(COLOR.leaf));
   });
+
+  describe('shiftBy', () => {
+    const striped = () => {
+      const fb = new Framebuffer(4, 3);
+      for (let x = 0; x < 4; x += 1) fb.fillRect(x, 0, 1, 3, x); // column x has palette color x
+      return fb;
+    };
+
+    it('moves the picture by whole pixels', () => {
+      const fb = striped();
+      fb.shiftBy(1, 0);
+      expect(fb.rgbAt(1, 1)).toEqual(PALETTE_RGB[0]);
+      expect(fb.rgbAt(3, 1)).toEqual(PALETTE_RGB[2]);
+    });
+
+    it('repeats the edge instead of leaving a hole', () => {
+      const fb = striped();
+      fb.shiftBy(2, 0);
+      expect(fb.rgbAt(0, 1)).toEqual(PALETTE_RGB[0]);
+      for (let i = 3; i < fb.data.length; i += 4) expect(fb.data[i]).toBe(255);
+    });
+
+    it('moves vertically too, and does nothing for a zero shift', () => {
+      const fb = new Framebuffer(2, 3);
+      fb.fillRect(0, 0, 2, 1, 5);
+      fb.fillRect(0, 1, 2, 2, 6);
+      const before = fb.data.slice();
+      fb.shiftBy(0, 0);
+      expect(fb.data).toEqual(before);
+      fb.shiftBy(0, 1);
+      expect(fb.rgbAt(0, 1)).toEqual(PALETTE_RGB[5]);
+    });
+  });
 });

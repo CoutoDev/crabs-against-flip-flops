@@ -17,8 +17,11 @@ export interface SaveDataV1 {
   readonly ownedSkins: readonly string[];
   readonly equippedSkin: string;
   readonly settings: {
+    /** Silences everything (sound effects and music). */
     readonly muted: boolean;
-    /** 0..1. Stored for the volume control that arrives with the audio polish (M5). */
+    /** Background music on or off; effects stay. */
+    readonly music: boolean;
+    /** Master volume, 0..1. */
     readonly volume: number;
     /** `null` until the player chooses: the browser language is used meanwhile. */
     readonly locale: Locale | null;
@@ -44,7 +47,7 @@ export function defaultSave(rules: SaveRules): SaveDataV1 {
     bestScoreByLevel: {},
     ownedSkins: [rules.defaultSkin],
     equippedSkin: rules.defaultSkin,
-    settings: { muted: false, volume: 1, locale: null },
+    settings: { muted: false, music: true, volume: 1, locale: null },
   };
 }
 
@@ -102,6 +105,7 @@ export function parseSave(raw: unknown, rules: SaveRules): SaveDataV1 {
     equippedSkin,
     settings: {
       muted: settingsRaw['muted'] === true,
+      music: settingsRaw['music'] !== false,
       volume:
         typeof volumeRaw === 'number' && volumeRaw >= 0 && volumeRaw <= 1
           ? volumeRaw

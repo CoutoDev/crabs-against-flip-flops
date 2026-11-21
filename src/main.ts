@@ -1,5 +1,6 @@
 import './style.css';
 import { EventBus } from './application/event-bus';
+import { musicFor } from './application/music-policy';
 import { Profile } from './application/profile';
 import { GameFlow } from './application/game-flow';
 import { PlayerControls } from './application/player-controls';
@@ -8,7 +9,9 @@ import { LEVELS } from './data/levels';
 import { DEFAULT_SKIN_ID, SKINS } from './data/skins';
 import { FIELD_HEIGHT_PX, FIELD_WIDTH_PX } from './domain/constants';
 import type { DomainEvent } from './domain/events';
+import { createRng } from './domain/rng';
 import { bindSfx } from './infrastructure/audio/bind-sfx';
+import { WebAudioMusic } from './infrastructure/audio/web-audio-music';
 import { WebAudioSfx } from './infrastructure/audio/web-audio-sfx';
 import { startGameLoop } from './infrastructure/browser/game-loop';
 import { bindKeyboard, bindPointer } from './infrastructure/input/dom-input';
@@ -16,7 +19,7 @@ import { CanvasPresenter } from './infrastructure/render/canvas-presenter';
 import { Effects } from './infrastructure/render/effects';
 import { Framebuffer } from './infrastructure/render/framebuffer';
 import { Scene } from './infrastructure/render/scene';
-import { slotsForSkin } from './infrastructure/render/skin-slots';
+import { slotsForSkin, trailForSkin } from './infrastructure/render/skin-slots';
 import {
   browserStorage,
   LocalStorageProgressRepository,
@@ -57,15 +60,18 @@ const flow = new GameFlow({
 });
 const controls = new PlayerControls(flow);
 const sfx = new WebAudioSfx();
-const effects = new Effects();
+const music = new WebAudioMusic(() => sfx.graph);
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const effects = new Effects({
+  rng: createRng(Math.floor(Math.random() * 0x100000000)),
+  reducedMotion: () => reducedMotion.matches,
+});
 const scene = new Scene();
 const frame = new Framebuffer(FIELD_WIDTH_PX, FIELD_HEIGHT_PX);
 
 let translator = createTranslator(
   profile.data.settings.locale ?? detectLocale(navigator.languages),
 );
-let muted = profile.data.settings.muted;
-sfx.setMuted(muted);
 let hudKey = '';
 
 const icons: ViewIcons = {
@@ -101,11 +107,13 @@ const view = new GameView(
     closeShop: () => flow.closeShop(),
     buySkin: (skinId) => {
       if (profile.buy(skinId) === undefined) {
+        sfx.play({ id: 'buy', semitones: 0 });
         view.announce(translator.t('shop.bought', { name: view.skinLabel(skinId) }));
       }
     },
     equipSkin: (skinId) => {
       if (profile.equip(skinId) === undefined) {
+        sfx.play({ id: 'equip', semitones: 0 });
         view.announce(translator.t('shop.nowUsing', { name: view.skinLabel(skinId) }));
       }
     },
@@ -118,15 +126,12 @@ const view = new GameView(
       translator = createTranslator(locale);
       profile.setLocale(locale);
       hudKey = '';
-      view.setTranslator(translator, muted);
+      view.setTranslator(translator);
       refit();
     },
-    toggleSound: () => {
-      muted = !muted;
-      sfx.setMuted(muted);
-      profile.setMuted(muted);
-      view.setTranslator(translator, muted);
-    },
+    toggleSound: () => profile.setMuted(!profile.data.settings.muted),
+    toggleMusic: () => profile.setMusic(!profile.data.settings.music),
+    setVolume: (volume) => profile.setVolume(volume),
   },
   icons,
 );
@@ -163,12 +168,32 @@ function pushProfile(): void {
   );
 }
 
-profile.onChange(pushProfile);
+/** Sound, music and volume follow the saved settings, wherever they were changed. */
+function applyAudio(): void {
+  const { muted, music: musicOn, volume } = profile.data.settings;
+  sfx.setMuted(muted);
+  sfx.setVolume(volume);
+  music.setEnabled(musicOn && !muted); // a muted game does not even schedule notes
+  view.setAudio({ muted, music: musicOn, volume });
+}
+
+/** The music follows the screen and the level's biome; it never plays in a hidden tab. */
+function applyMusic(): void {
+  const biome = LEVELS[flow.levelIndex]?.biome ?? 'beach';
+  music.setTrack(document.hidden ? undefined : musicFor(flow.screen, biome));
+}
+
+profile.onChange(() => {
+  pushProfile();
+  applyAudio();
+});
 pushProfile();
+applyAudio();
 // The points of a round and the campaign progress are saved the moment the round ends.
 flow.onRoundEnd((outcome) => profile.recordRound(outcome.score, flow.progress));
 
 flow.onChange(() => {
+  applyMusic();
   hudKey = ''; // another level changes the goal and the level number, not just the score
   view.showScreen(flow.screen, flow.outcome, campaignView());
   refit();
@@ -186,16 +211,30 @@ bindKeyboard(document, (command) => {
   return controls.handle(command);
 });
 
+// Browsers only allow audio after a gesture: the first touch or key wakes it up (and the music).
+for (const gesture of ['pointerdown', 'keydown'] as const) {
+  document.addEventListener(gesture, () => void sfx.unlock(), { capture: true });
+}
+// Every button gives a small click.
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  if (target instanceof Element && target.closest('button:not(:disabled)') !== null) {
+    sfx.play({ id: 'click', semitones: 0 });
+  }
+});
+
 // A round must never keep running unseen: leaving the tab or window pauses it.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) flow.pause();
+  applyMusic();
 });
 window.addEventListener('blur', () => flow.pause());
 window.addEventListener('resize', refit);
 view.onLayoutChange(refit);
 
-view.setTranslator(translator, muted);
+view.setTranslator(translator);
 view.showScreen(flow.screen, flow.outcome, campaignView());
+applyMusic();
 refit();
 
 startGameLoop((dtMs) => {
@@ -211,6 +250,7 @@ startGameLoop((dtMs) => {
       effects,
       aim: controls.aimVisible ? controls.aim : undefined,
       slipperSlots: slotsForSkin(profile.data.equippedSkin),
+      trail: trailForSkin(profile.data.equippedSkin),
     });
     const key = `${state.score}|${state.ammo}|${state.combo}`;
     if (key !== hudKey) {

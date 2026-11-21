@@ -1,6 +1,6 @@
 # ADR-0001 — Arquitetura do "Crabs Against Flip Flops" / "Caranguejos vs Chinelos"
 
-Status: **Aceita** (D1–D15 acordadas em 2026-11-20; D16–D19, do M2, acordadas em 2026-11-20 e implementadas; D6 revisada e D20 acordadas em 2026-11-21 e implementadas; D21–D24, do M3, definidas em 2026-11-21 sem consulta e **a revisar**; D25 pedida pelo usuário em 2026-11-21; D26–D28, do M4, implementadas (catálogo e preços de D15 aprovados em 2026-11-21); pendências na seção 7)
+Status: **Aceita** (D1–D15 acordadas em 2026-11-20; D16–D19, do M2, acordadas em 2026-11-20 e implementadas; D6 revisada e D20 acordadas em 2026-11-21 e implementadas; D21–D24, do M3, definidas em 2026-11-21 sem consulta e **a revisar**; D25 pedida pelo usuário em 2026-11-21; D26–D28, do M4, implementadas; D29–D33, do M5, implementadas (escopo escolhido pelo usuário em 2026-11-21) (catálogo e preços de D15 aprovados em 2026-11-21); pendências na seção 7)
 Data: 2026-11-20
 
 > Espelho do ADR-002 do projeto "Dev Projects" no claude.ai. Neste repositório, este arquivo é a fonte da verdade a partir de agora.
@@ -45,6 +45,11 @@ Propriedade intelectual: "Havaianas" é marca de terceiros. Os sprites serão or
 | D26 | Persistência (M4)                 | `Profile` (application) é o único escritor do save: aplica a mudança, grava via a porta `ProgressRepository` e avisa os ouvintes. Adaptador `LocalStorageProgressRepository` (chave `crabs-against-flip-flops:save`, JSON). Leitura sempre por `parseSave`: versão desconhecida ou lixo → save padrão; campo inválido → só aquele campo volta ao padrão. Falha de leitura/escrita do storage (modo privado, cota) nunca lança: o jogo roda sem lembrar. Os pontos da rodada entram no saldo no fim de toda rodada (D12) via `GameFlow.onRoundEnd`; o progresso só avança (nunca regride ao rejogar um nível antigo). Idioma e mudo persistem; idioma `null` = usar o do navegador. |
 | D27 | Loja e skins (M4)                 | Catálogo aprovado (preços, em pontos): Clássico 0 · Oceano 75 · Limão 125 · Mangue 200 · Rosa 300 · Meia-noite 400 · Ouro 750; só cor (sola/tira), o rastro fica para o M5. Regras puras em `domain/rules/shop.ts` (`buySkin`, `equipSkin`: skin desconhecida, já possuída, saldo insuficiente, não possuída). Comprar não equipa. Tela `shop` acessível do menu; botões de compra ficam desabilitados sem saldo; o foco permanece no botão apertado (Comprar vira Usar). O evento `SkinPurchased` do rascunho inicial não existe: o feedback é o anúncio no `aria-live`. Cores por id em `render/skin-slots.ts`; id desconhecido usa o visual padrão.                             |
 | D28 | Nome do jogador (M4)              | Opcional, no menu, salvo ao digitar. Limpo por `sanitizePlayerName`: letras, dígitos, espaço, `_ - .`, no máximo 16 caracteres, sem emoji nem caracteres de controle ou invisíveis. Por ora só local; é o gancho do placar compartilhado (pendência 4).                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| D29 | Áudio completo (M5)               | Volume mestre (0..1, persistido), "Som" (muda tudo) e "Música" (só a trilha) nos painéis de configurações. Trilha chiptune por bioma, como dados (`music-specs.ts`: 2 compassos de semicolcheias, escalas pentatônicas para qualquer nota combinar), tocada por `WebAudioMusic` agendando notas à frente do relógio do áudio. Segue a tela (`musicFor`): toca no menu, loja, briefing e rodada; cala na pausa e no fim (o jingle precisa do silêncio) e com a aba escondida. Som mudo nem agenda notas. Cliques de botão e sons de compra/uso. O contexto de áudio nasce no primeiro gesto.                                                                                        |
+| D30 | Juice (M5)                        | Partículas na cor do caranguejo atingido, tremor de tela curto (hit e marco), confete na vitória e rastro do chinelo com cor por skin (parte da skin, D15). Tudo em `Effects`/`Scene` com RNG semeado (testável). Com `prefers-reduced-motion`: sem tremor nem confete e poucas partículas; o texto de pontos continua (informação não é movimento). Limite de 160 partículas.                                                                                                                                                                                                                                                                                                     |
+| D31 | Fim de rodada (M5)                | O diálogo mostra o resumo, "Somados ao seu saldo: N" e o melhor do nível (ou "Novo recorde"; a primeira rodada de um nível não conta como recorde).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| D32 | Acessibilidade (M5)               | `@axe-core/playwright` roda no E2E (WCAG 2.1 A/AA) em menu, loja, briefing, jogo, pausa e fim, também em pt-BR. Achado e corrigido: o botão de pausa tinha "II" visível e nome "Pausar" (`label-content-name-mismatch`); agora o glifo é desenhado por CSS. Controle de volume com rótulo e alvo de 44 px.                                                                                                                                                                                                                                                                                                                                                                         |
+| D33 | App instalável (M5)               | `manifest.webmanifest` (caminhos relativos, vale em subcaminho do Pages), ícones 192/512 e `theme-color`; sem service worker (sem modo offline). Os PNGs são gerados do próprio sprite (`app-icon.ts`) e um teste compara o arquivo com a renderização; para regerar: `UPDATE_ICONS=1 npx vitest run app-icon`.                                                                                                                                                                                                                                                                                                                                                                    |
 
 Por que D9 sem biblioteca: são 2 idiomas e algumas centenas de strings, sem carregamento sob demanda e sem formatação ICU complexa. Um dicionário tipado dá segurança em tempo de compilação (faltou uma chave em pt-BR, não compila) e zero dependência. O `Translator` fica atrás de uma interface, então trocar por i18next ou similar é localizado na camada de UI. Revisitar se aparecerem mais idiomas ou textos com gênero/concordância complexos.
 
@@ -117,7 +122,7 @@ interface SaveDataV1 {
   bestScoreByLevel: Record<number, number>;
   ownedSkins: string[];
   equippedSkin: string;
-  settings: { muted: boolean; volume: number; locale: Locale | null }; // null = idioma do navegador
+  settings: { muted: boolean; music: boolean; volume: number; locale: Locale | null }; // locale null = idioma do navegador
 }
 ```
 
@@ -157,7 +162,7 @@ interface SaveDataV1 {
 - **M2 — Esqueleto andante:** renderer + input + SFX básicos; um nível jogável de ponta a ponta. ✔ feito (D16–D19; ver 8.1)
 - **M3 — Campanha:** níveis em dados, biomas, dificuldade crescente, progressão. ✔ feito (D21–D24; ver 8.3)
 - **M4 — Loja e persistência:** repositório em `localStorage`, saldo, skins, equipar, locale persistido, nome do jogador. ✔ feito (D26–D28; ver 8.4)
-- **M5 — Acabamento:** áudio completo, juice (partículas, rastro), acessibilidade, deploy estático.
+- **M5 — Acabamento:** áudio completo, juice (partículas, rastro), acessibilidade, deploy estático. ✔ feito (D29–D33; ver 8.5; o deploy já existia desde o M2)
 - **M6 — Placar compartilhado (a fazer):** top 10 entre jogadores, com servidor (seção 9).
 
 ### 8.1 Resultado do M2 (retrato do fim do M2; o campo 320×180 foi trocado, ver 8.2)
@@ -223,3 +228,11 @@ Pedido do usuário: um placar compartilhado entre os jogadores com os **10 melho
 - Loja com 7 skins (D27), compra e uso por teclado e toque, textos nos dois idiomas, saldo mostrado na loja. O chinelo em jogo usa a skin equipada.
 - Nome do jogador opcional e limpo (D28).
 - Verificação: ver o PR (testes unitários, `typecheck`, `lint`, `format:check`, `build`, E2E).
+
+### 8.5 Resultado do M5: acabamento
+
+- Música por bioma, volume, "Som" e "Música" independentes; sons de clique, compra e uso; trilha para quando está mudo, pausado, no fim da rodada ou com a aba escondida.
+- Partículas, tremor, confete e rastro por skin, todos respeitando `prefers-reduced-motion`.
+- Fim de rodada com saldo e melhor pontuação; pausa sem texto duplicado para leitores de tela; axe sem violações nas 6 telas.
+- Instalável (manifest e ícones gerados do sprite).
+- **Não verificado por mim:** como a música soa (não há como ouvir aqui) e como o juice "se sente" em movimento. Os testes cobrem agenda, notas, estados e pixels, não gosto. Ajustar com playtest humano, como o balanceamento (pendência herdada).

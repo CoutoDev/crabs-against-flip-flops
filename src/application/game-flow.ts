@@ -12,6 +12,10 @@ export interface RoundOutcome {
   readonly score: number;
   readonly hits: number;
   readonly throws: number;
+  /** Best score on this level, this round included. */
+  readonly bestScore: number;
+  /** True when this round beat the previous best of the level (and there was one to beat). */
+  readonly newBest: boolean;
   /** Where "Next level" goes: set only after a win that is not on the last level. */
   readonly nextLevelIndex: number | undefined;
   /** True when the last level of the campaign was just won. */
@@ -212,7 +216,8 @@ export class GameFlow {
     const state = this.currentSession?.state;
     if (state === undefined) return;
     const level = this.deps.levels[this.currentLevelIndex];
-    if (level !== undefined && state.score > (this.bestScores[level.id] ?? 0)) {
+    const previousBest = level === undefined ? 0 : (this.bestScores[level.id] ?? 0);
+    if (level !== undefined && state.score > previousBest) {
       this.bestScores = { ...this.bestScores, [level.id]: state.score };
     }
     const hasNext = this.currentLevelIndex + 1 < this.deps.levels.length;
@@ -225,6 +230,8 @@ export class GameFlow {
       score: state.score,
       hits: state.hits,
       throws: state.throws,
+      bestScore: Math.max(previousBest, state.score),
+      newBest: previousBest > 0 && state.score > previousBest,
       nextLevelIndex: result === 'won' && hasNext ? this.currentLevelIndex + 1 : undefined,
       campaignComplete: result === 'won' && !hasNext,
     };

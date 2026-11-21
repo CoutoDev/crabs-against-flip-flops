@@ -90,6 +90,20 @@ export class Profile {
     }
   }
 
+  setMusic(music: boolean): void {
+    if (this.current.settings.music !== music) {
+      this.update({ settings: { ...this.current.settings, music } });
+    }
+  }
+
+  /** Clamped to 0..1. */
+  setVolume(volume: number): void {
+    const clamped = Math.min(1, Math.max(0, Number.isFinite(volume) ? volume : 1));
+    if (this.current.settings.volume !== clamped) {
+      this.update({ settings: { ...this.current.settings, volume: clamped } });
+    }
+  }
+
   private shopState(): ShopState {
     const { balance, ownedSkins, equippedSkin } = this.current;
     return { balance, ownedSkins, equippedSkin };
