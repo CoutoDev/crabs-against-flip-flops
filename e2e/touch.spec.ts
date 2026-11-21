@@ -4,6 +4,8 @@ test.describe('touch on a phone', () => {
   test('the game starts in the browser language and a tap throws', async ({ game, page }) => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Caranguejos vs Chinelos');
     await game.primaryButton().tap();
+    await game.expectScreen('briefing');
+    await game.primaryButton().tap();
     await game.expectScreen('playing');
 
     const box = await game.canvas.boundingBox();

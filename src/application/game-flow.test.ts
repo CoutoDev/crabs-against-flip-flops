@@ -4,6 +4,12 @@ import { makeLevel, must, TEST_CRAB_SPECS } from '../domain/test-support';
 import { EventBus } from './event-bus';
 import { GameFlow, type CampaignProgress } from './game-flow';
 
+/** Opens a level and gets past its briefing, as a player pressing Start would. */
+function begin(flow: GameFlow, levelIndex?: number): void {
+  flow.play(levelIndex);
+  flow.start();
+}
+
 function setup(levelOverrides = {}, progress?: CampaignProgress) {
   const bus = new EventBus<DomainEvent>();
   const seeds = [11, 22, 33];
@@ -42,21 +48,70 @@ describe('GameFlow', () => {
     expect(flow.outcome).toBeUndefined();
   });
 
-  it('plays the first level with a fresh seed and notifies listeners', () => {
+  it('opens the first level on a briefing with a frozen round and a fresh seed', () => {
     const { flow, newSeed } = setup();
     const listener = vi.fn();
     flow.onChange(listener);
     flow.play();
-    expect(flow.screen).toBe('playing');
+    expect(flow.screen).toBe('briefing');
     expect(flow.levelIndex).toBe(0);
     expect(newSeed).toHaveBeenCalledTimes(1);
-    expect(must(flow.session).state.status).toBe('playing');
+    const session = must(flow.session);
+    expect(session.paused).toBe(true);
+    expect(session.advance(1000)).toBe(0); // nothing moves while the player reads
+    expect(session.state.timeMs).toBe(0);
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('start() ends the briefing and lets the round run', () => {
+    const { flow } = setup();
+    flow.play();
+    flow.start();
+    expect(flow.screen).toBe('playing');
+    const session = must(flow.session);
+    expect(session.paused).toBe(false);
+    expect(session.advance(100)).toBeGreaterThan(0);
+  });
+
+  it('start() does nothing outside a briefing', () => {
+    const { flow } = setup();
+    const listener = vi.fn();
+    flow.onChange(listener);
+    flow.start();
+    expect(flow.screen).toBe('menu');
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('does not end a round while it is still on the briefing', () => {
+    const { flow, bus } = setup();
+    flow.play();
+    bus.publish({ type: 'RoundLost', score: 0 });
+    expect(flow.screen).toBe('briefing');
+  });
+
+  it('retry() replays the same level straight away, with a new seed and no briefing', () => {
+    const { flow, bus, newSeed } = setup({}, { highestUnlockedLevel: 2, bestScoreByLevel: {} });
+    begin(flow, 1);
+    bus.publish({ type: 'RoundLost', score: 0 });
+    flow.retry();
+    expect(flow.screen).toBe('playing');
+    expect(flow.levelIndex).toBe(1);
+    expect(flow.outcome).toBeUndefined();
+    expect(must(flow.session).paused).toBe(false);
+    expect(newSeed).toHaveBeenCalledTimes(2);
+  });
+
+  it('can leave a briefing for the menu', () => {
+    const { flow } = setup();
+    flow.play();
+    flow.toMenu();
+    expect(flow.screen).toBe('menu');
+    expect(flow.session).toBeUndefined();
   });
 
   it('can play an unlocked level and rejects unknown ones', () => {
     const { flow } = setup({}, { highestUnlockedLevel: 2, bestScoreByLevel: {} });
-    flow.play(1);
+    begin(flow, 1);
     expect(flow.levelIndex).toBe(1);
     expect(() => flow.play(5)).toThrow(RangeError);
     expect(() => flow.play(-1)).toThrow(RangeError);
@@ -65,7 +120,7 @@ describe('GameFlow', () => {
 
   it('pauses and resumes the round, freezing the simulation in between', () => {
     const { flow } = setup();
-    flow.play();
+    begin(flow);
     const session = must(flow.session);
     flow.pause();
     expect(flow.screen).toBe('paused');
@@ -89,7 +144,7 @@ describe('GameFlow', () => {
 
   it('toggles pause', () => {
     const { flow } = setup();
-    flow.play();
+    begin(flow);
     flow.togglePause();
     expect(flow.screen).toBe('paused');
     flow.togglePause();
@@ -98,7 +153,7 @@ describe('GameFlow', () => {
 
   it('ends the round as won when the level is cleared, with the final numbers', () => {
     const { flow, bus } = setup();
-    flow.play();
+    begin(flow);
     bus.publish({ type: 'LevelCleared', score: 100, ammoLeft: 3 });
     expect(flow.screen).toBe('ended');
     expect(flow.outcome).toMatchObject({
@@ -112,7 +167,7 @@ describe('GameFlow', () => {
 
   it('ends the round as lost when the flip flops run out', () => {
     const { flow, bus } = setup();
-    flow.play();
+    begin(flow);
     bus.publish({ type: 'RoundLost', score: 20 });
     expect(flow.screen).toBe('ended');
     expect(flow.outcome?.result).toBe('lost');
@@ -120,7 +175,7 @@ describe('GameFlow', () => {
 
   it('reads the outcome numbers from the round state', () => {
     const { flow, bus } = setup({ ammo: 5, targetScore: 10 });
-    flow.play();
+    begin(flow);
     must(flow.session).throwAt({ x: 10, y: 10 });
     bus.publish({ type: 'RoundLost', score: 0 });
     expect(flow.outcome).toMatchObject({ throws: 1, hits: 0, score: 0 });
@@ -128,7 +183,7 @@ describe('GameFlow', () => {
 
   it('ignores round-ending events when no round is being played (e.g. while paused)', () => {
     const { flow, bus } = setup();
-    flow.play();
+    begin(flow);
     flow.pause();
     bus.publish({ type: 'RoundLost', score: 0 });
     expect(flow.screen).toBe('paused');
@@ -137,10 +192,10 @@ describe('GameFlow', () => {
 
   it('plays again with a new seed, clearing the previous outcome', () => {
     const { flow, bus, newSeed } = setup();
-    flow.play();
+    begin(flow);
     bus.publish({ type: 'RoundLost', score: 0 });
     const first = must(flow.session);
-    flow.play();
+    begin(flow);
     expect(flow.screen).toBe('playing');
     expect(flow.outcome).toBeUndefined();
     expect(flow.session).not.toBe(first);
@@ -150,7 +205,7 @@ describe('GameFlow', () => {
 
   it('goes back to the menu discarding the round', () => {
     const { flow } = setup();
-    flow.play();
+    begin(flow);
     flow.toMenu();
     expect(flow.screen).toBe('menu');
     expect(flow.session).toBeUndefined();
@@ -161,7 +216,7 @@ describe('GameFlow', () => {
     const listener = vi.fn();
     const off = flow.onChange(listener);
     off();
-    flow.play();
+    begin(flow);
     expect(listener).not.toHaveBeenCalled();
   });
 
@@ -196,7 +251,7 @@ describe('GameFlow', () => {
 
     it('unlocks the next level when the frontier level is won', () => {
       const { flow, bus } = setup();
-      flow.play();
+      begin(flow);
       win(bus);
       expect(flow.highestUnlockedIndex).toBe(1);
       expect(flow.progress.highestUnlockedLevel).toBe(2);
@@ -209,7 +264,7 @@ describe('GameFlow', () => {
 
     it('does not unlock anything on a loss', () => {
       const { flow, bus } = setup();
-      flow.play();
+      begin(flow);
       lose(bus);
       expect(flow.highestUnlockedIndex).toBe(0);
       expect(flow.outcome).toMatchObject({ result: 'lost', nextLevelIndex: undefined });
@@ -217,7 +272,7 @@ describe('GameFlow', () => {
 
     it('does not move the frontier back when an earlier level is replayed and won', () => {
       const { flow, bus } = setup({}, { highestUnlockedLevel: 3, bestScoreByLevel: {} });
-      flow.play(0);
+      begin(flow, 0);
       win(bus);
       expect(flow.highestUnlockedIndex).toBe(2);
       expect(flow.outcome?.nextLevelIndex).toBe(1);
@@ -225,10 +280,10 @@ describe('GameFlow', () => {
 
     it('goes to the next level, with a fresh round', () => {
       const { flow, bus, newSeed } = setup();
-      flow.play();
+      begin(flow);
       win(bus);
       flow.next();
-      expect(flow.screen).toBe('playing');
+      expect(flow.screen).toBe('briefing'); // each new level opens with its briefing
       expect(flow.levelIndex).toBe(1);
       expect(flow.outcome).toBeUndefined();
       expect(newSeed).toHaveBeenCalledTimes(2);
@@ -239,7 +294,7 @@ describe('GameFlow', () => {
       const listener = vi.fn();
       flow.onChange(listener);
       flow.next(); // on the menu
-      flow.play();
+      begin(flow);
       lose(bus);
       listener.mockClear();
       flow.next(); // lost: the level is not cleared
@@ -250,7 +305,7 @@ describe('GameFlow', () => {
 
     it('flags the campaign as complete when the last level is won, and has no next level', () => {
       const { flow, bus } = setup({}, { highestUnlockedLevel: 3, bestScoreByLevel: {} });
-      flow.play(2);
+      begin(flow, 2);
       win(bus);
       expect(flow.highestUnlockedIndex).toBe(2);
       expect(flow.outcome).toMatchObject({
@@ -284,12 +339,12 @@ describe('GameFlow', () => {
         expect(session.state.score).toBe(10);
       };
 
-      flow.play();
+      begin(flow);
       hitOnce();
       lose(bus);
       expect(flow.progress.bestScoreByLevel).toEqual({ 1: 10 });
 
-      flow.play();
+      begin(flow);
       lose(bus); // 0 points this time: the best must not go down
       expect(flow.progress.bestScoreByLevel).toEqual({ 1: 10 });
     });
@@ -312,14 +367,14 @@ describe('GameFlow', () => {
 
     it('only selects while on the menu', () => {
       const { flow } = setup({}, { highestUnlockedLevel: 2, bestScoreByLevel: {} });
-      flow.play(0);
+      begin(flow, 0);
       flow.select(1);
       expect(flow.levelIndex).toBe(0);
     });
 
     it('after winning, the menu offers the level that was just unlocked', () => {
       const { flow, bus } = setup();
-      flow.play();
+      begin(flow);
       win(bus);
       flow.toMenu();
       expect(flow.levelIndex).toBe(1);
@@ -327,7 +382,7 @@ describe('GameFlow', () => {
 
     it('after losing, the menu keeps the level that was being played', () => {
       const { flow, bus } = setup({}, { highestUnlockedLevel: 3, bestScoreByLevel: {} });
-      flow.play(1);
+      begin(flow, 1);
       lose(bus);
       flow.toMenu();
       expect(flow.levelIndex).toBe(1);

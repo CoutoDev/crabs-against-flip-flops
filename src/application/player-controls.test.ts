@@ -35,6 +35,7 @@ describe('PlayerControls', () => {
   it('moves the aim with the keyboard, faster with Shift', () => {
     const { flow, controls } = setup();
     flow.play();
+    flow.start();
     expect(controls.handle({ kind: 'aim', dx: 1, dy: 0, fast: false })).toBe(true);
     expect(controls.aim.x).toBe(DEFAULT_AIM.x + AIM_STEP_PX);
     controls.handle({ kind: 'aim', dx: 0, dy: -1, fast: true });
@@ -45,6 +46,7 @@ describe('PlayerControls', () => {
   it('throws at the aim point with the keyboard', () => {
     const { flow, controls } = setup();
     flow.play();
+    flow.start();
     expect(controls.handle({ kind: 'throw' })).toBe(true);
     const state = must(flow.session).state;
     expect(state.throws).toBe(1);
@@ -54,6 +56,7 @@ describe('PlayerControls', () => {
   it('aims and throws where the pointer was pressed', () => {
     const { flow, controls } = setup();
     flow.play();
+    flow.start();
     expect(controls.pointerPressed({ x: 40, y: 90 })).toBe(true);
     expect(controls.aim).toEqual({ x: 40, y: 90 });
     expect(must(flow.session).state.flights[0]?.target).toEqual({ x: 40, y: 90 });
@@ -62,6 +65,7 @@ describe('PlayerControls', () => {
   it('follows the pointer without throwing', () => {
     const { flow, controls } = setup();
     flow.play();
+    flow.start();
     controls.pointerMoved({ x: 200, y: 60 });
     expect(controls.aim).toEqual({ x: 200, y: 60 });
     expect(must(flow.session).state.throws).toBe(0);
@@ -70,6 +74,7 @@ describe('PlayerControls', () => {
   it('pauses and resumes, and ignores moves and throws while paused', () => {
     const { flow, controls } = setup();
     flow.play();
+    flow.start();
     expect(controls.handle({ kind: 'pause' })).toBe(true);
     expect(flow.screen).toBe('paused');
     expect(controls.handle({ kind: 'throw' })).toBe(false);
@@ -85,6 +90,7 @@ describe('PlayerControls', () => {
   it('does not pause from the end screen', () => {
     const { flow, controls, bus } = setup();
     flow.play();
+    flow.start();
     bus.publish({ type: 'RoundLost', score: 0 });
     expect(flow.screen).toBe('ended');
     expect(controls.handle({ kind: 'pause' })).toBe(false);

@@ -14,8 +14,10 @@ import { CanvasPresenter } from './infrastructure/render/canvas-presenter';
 import { Effects } from './infrastructure/render/effects';
 import { Framebuffer } from './infrastructure/render/framebuffer';
 import { Scene } from './infrastructure/render/scene';
+import { spriteToCanvas } from './infrastructure/render/sprite-canvas';
+import { SPRITES } from './infrastructure/render/sprites';
 import { announcementFor } from './ui/announce';
-import { GameView, type CampaignView } from './ui/game-view';
+import { GameView, type CampaignView, type CrabIcons } from './ui/game-view';
 import { buildHud } from './ui/hud-model';
 import { detectLocale } from './ui/i18n/detect-locale';
 import { createTranslator } from './ui/i18n/translator';
@@ -46,33 +48,52 @@ let translator = createTranslator(detectLocale(navigator.languages));
 let muted = false;
 let hudKey = '';
 
-const view = new GameView(root, {
-  play: () => {
-    void sfx.unlock(); // browsers only start audio after a user gesture, and this is one
-    effects.clear();
-    flow.play();
+const crabIcons: CrabIcons = {
+  common: () => spriteToCanvas(SPRITES.crabs.common[0]),
+  swimmer: () => spriteToCanvas(SPRITES.crabs.swimmer[0]),
+  fiddler: () => spriteToCanvas(SPRITES.crabs.fiddler[0]),
+};
+
+const view = new GameView(
+  root,
+  {
+    play: () => {
+      void sfx.unlock(); // browsers only start audio after a user gesture, and this is one
+      effects.clear();
+      flow.play();
+    },
+    start: () => {
+      void sfx.unlock();
+      flow.start();
+    },
+    retry: () => {
+      void sfx.unlock();
+      effects.clear();
+      flow.retry();
+    },
+    next: () => {
+      void sfx.unlock();
+      effects.clear();
+      flow.next();
+    },
+    selectLevel: (index) => flow.select(index),
+    resume: () => flow.resume(),
+    pause: () => flow.pause(),
+    toMenu: () => flow.toMenu(),
+    setLocale: (locale) => {
+      translator = createTranslator(locale);
+      hudKey = '';
+      view.setTranslator(translator, muted);
+      refit();
+    },
+    toggleSound: () => {
+      muted = !muted;
+      sfx.setMuted(muted);
+      view.setTranslator(translator, muted);
+    },
   },
-  next: () => {
-    void sfx.unlock();
-    effects.clear();
-    flow.next();
-  },
-  selectLevel: (index) => flow.select(index),
-  resume: () => flow.resume(),
-  pause: () => flow.pause(),
-  toMenu: () => flow.toMenu(),
-  setLocale: (locale) => {
-    translator = createTranslator(locale);
-    hudKey = '';
-    view.setTranslator(translator, muted);
-    refit();
-  },
-  toggleSound: () => {
-    muted = !muted;
-    sfx.setMuted(muted);
-    view.setTranslator(translator, muted);
-  },
-});
+  crabIcons,
+);
 const presenter = new CanvasPresenter(view.canvas, frame);
 
 function refit(): void {
@@ -88,11 +109,13 @@ bus.subscribe((event) => {
 });
 
 function campaignView(): CampaignView {
+  const level = LEVELS[flow.levelIndex];
   return {
     levelIds: LEVELS.map((level) => level.id),
     selected: flow.levelIndex,
     highestUnlocked: flow.highestUnlockedIndex,
-    biome: LEVELS[flow.levelIndex]?.biome ?? 'beach',
+    biome: level?.biome ?? 'beach',
+    crabs: (level?.crabs ?? []).map(({ type }) => ({ type, points: CRAB_TYPES[type].points })),
   };
 }
 

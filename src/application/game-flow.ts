@@ -4,7 +4,7 @@ import type { DomainEvent } from '../domain/events';
 import type { EventBus } from './event-bus';
 import { GameSession } from './game-session';
 
-export type Screen = 'menu' | 'playing' | 'paused' | 'ended';
+export type Screen = 'menu' | 'briefing' | 'playing' | 'paused' | 'ended';
 
 export interface RoundOutcome {
   readonly result: 'won' | 'lost';
@@ -110,19 +110,24 @@ export class GameFlow {
     this.go('menu');
   }
 
-  /** Starts a fresh round of the given level (also used to retry or play again). */
+  /**
+   * Opens the briefing of a level: the round exists but is frozen, so the player can see which
+   * crabs are coming before `start()` lets it run.
+   */
   play(levelIndex: number = this.currentLevelIndex): void {
-    this.assertPlayable(levelIndex);
-    const level = this.deps.levels[levelIndex];
-    if (level === undefined) return; // unreachable: assertPlayable checked the range
-    this.currentLevelIndex = levelIndex;
-    this.currentOutcome = undefined;
-    this.currentSession = new GameSession(
-      { level, crabSpecs: this.deps.crabSpecs },
-      this.deps.newSeed(),
-      this.deps.bus,
-    );
+    this.begin(levelIndex, 'briefing');
+  }
+
+  /** Ends the briefing and lets the round run. */
+  start(): void {
+    if (this.current !== 'briefing') return;
+    this.currentSession?.resume();
     this.go('playing');
+  }
+
+  /** Plays the same level again straight away (no briefing: the player has just seen it). */
+  retry(): void {
+    this.begin(this.currentLevelIndex, 'playing');
   }
 
   pause(): void {
@@ -156,6 +161,22 @@ export class GameFlow {
     this.currentSession = undefined;
     this.currentOutcome = undefined;
     this.go('menu');
+  }
+
+  private begin(levelIndex: number, screen: 'briefing' | 'playing'): void {
+    this.assertPlayable(levelIndex);
+    const level = this.deps.levels[levelIndex];
+    if (level === undefined) return; // unreachable: assertPlayable checked the range
+    this.currentLevelIndex = levelIndex;
+    this.currentOutcome = undefined;
+    const session = new GameSession(
+      { level, crabSpecs: this.deps.crabSpecs },
+      this.deps.newSeed(),
+      this.deps.bus,
+    );
+    if (screen === 'briefing') session.pause();
+    this.currentSession = session;
+    this.go(screen);
   }
 
   private onEvent(event: DomainEvent): void {
