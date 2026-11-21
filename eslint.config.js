@@ -31,7 +31,7 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['**/infrastructure/**', '**/ui/**'],
+              group: ['**/infrastructure/**', '**/ui/**', '**/data/**'],
               message: 'Dependencies point inwards: domain/application cannot import outer layers.',
             },
           ],
