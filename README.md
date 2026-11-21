@@ -20,6 +20,12 @@ npm run format       # Prettier
 npm run build        # typecheck + production build in dist/
 ```
 
+## Deploy (GitHub Pages)
+
+The browser cannot run `.ts` files, so the site is **built** with Vite and only `dist/` is published; the workflow in [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) does that on every push to `main`. One-time setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. To try the production build locally: `npm run build && npm run preview`.
+
+O navegador não executa `.ts`, então o site é **compilado** pelo Vite e só o `dist/` é publicado; o workflow acima faz isso a cada push na `main`. Configuração única: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Para testar o build de produção localmente: `npm run build && npm run preview`.
+
 ## Architecture / Arquitetura
 
 Clean-architecture layers (`domain` → `application` → `infrastructure`/`ui`), fixed-timestep simulation, 320×180 pixel canvas, chiptune audio synthesized with WebAudio, levels and skins as data, `localStorage` behind a repository port. Full rationale and roadmap in [`docs/adr/0001-arquitetura.md`](docs/adr/0001-arquitetura.md).

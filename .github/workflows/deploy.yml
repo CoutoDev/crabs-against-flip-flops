@@ -1,0 +1,49 @@
+name: Deploy to GitHub Pages
+
+# Publishes the Vite build output (dist/), never the TypeScript sources.
+# One-time setup in the repository: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Guard — the published HTML must not reference TypeScript files
+        run: |
+          if grep -nE '(src|href)="[^"]*\.tsx?"' dist/index.html; then
+            echo "dist/index.html still references a .ts file; the build output is wrong." >&2
+            exit 1
+          fi
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
