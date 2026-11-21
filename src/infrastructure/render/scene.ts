@@ -43,6 +43,11 @@ export class Scene {
     return bg;
   }
 
+  /** Draws a biome's scenery ahead of time, so the first frame that needs it does not stall. */
+  prepare(biome: Biome): void {
+    this.background(biome);
+  }
+
   /** Just the scenery, for screens without a round (the main menu). */
   renderBackdrop(fb: Framebuffer, biome: Biome): void {
     fb.copyFrom(this.background(biome));

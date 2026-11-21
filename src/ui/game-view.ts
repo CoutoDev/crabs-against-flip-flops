@@ -29,6 +29,8 @@ export interface ViewActions {
   toggleSound(): void;
   toggleMusic(): void;
   setVolume(volume: number): void;
+  /** The slider was released: time to store the volume. */
+  commitVolume(): void;
   openShop(): void;
   closeShop(): void;
   buySkin(skinId: string): void;
@@ -82,7 +84,10 @@ class SettingsPanel {
 
   constructor(
     id: string,
-    actions: Pick<ViewActions, 'setLocale' | 'toggleSound' | 'toggleMusic' | 'setVolume'>,
+    actions: Pick<
+      ViewActions,
+      'setLocale' | 'toggleSound' | 'toggleMusic' | 'setVolume' | 'commitVolume'
+    >,
   ) {
     const group = el('div', 'settings__group', this.label);
     group.setAttribute('role', 'group');
@@ -104,6 +109,7 @@ class SettingsPanel {
     this.volume.step = '5';
     this.volumeLabel.htmlFor = this.volume.id;
     this.volume.addEventListener('input', () => actions.setVolume(Number(this.volume.value) / 100));
+    this.volume.addEventListener('change', () => actions.commitVolume());
 
     this.root.append(
       group,

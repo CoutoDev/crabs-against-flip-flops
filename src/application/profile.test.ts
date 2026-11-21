@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SkinCatalog } from '../domain/entities/skin';
-import { Profile } from './profile';
+import { Profile, SAVE_DELAY_MS, type Later } from './profile';
 import type { ProgressRepository } from './ports/progress-repository';
 import type { SaveDataV1, SaveRules } from './save-data';
 
@@ -132,5 +132,104 @@ describe('Profile', () => {
     off();
     profile.equip('ocean');
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  describe('saving bursts of changes', () => {
+    /** A timer the test drives by hand. */
+    function manualTimer() {
+      const waiting: { run: () => void; ms: number; cancelled: boolean }[] = [];
+      const later: Later = (run, ms) => {
+        const entry = { run, ms, cancelled: false };
+        waiting.push(entry);
+        return () => {
+          entry.cancelled = true;
+        };
+      };
+      const fire = () => {
+        for (const entry of waiting.splice(0)) if (!entry.cancelled) entry.run();
+      };
+      return { later, fire, waiting };
+    }
+    const makeWithTimer = (stored?: unknown) => {
+      const { repo, saved } = memoryRepo(stored);
+      const timer = manualTimer();
+      return { profile: new Profile(repo, RULES, CATALOG, timer.later), saved, timer };
+    };
+
+    it('keeps the volume in memory at once but saves it once, after the dragging stops', () => {
+      const { profile, saved, timer } = makeWithTimer();
+      const heard = vi.fn();
+      profile.onChange(heard);
+      for (const volume of [0.9, 0.8, 0.7, 0.6, 0.5]) profile.setVolume(volume);
+      expect(profile.data.settings.volume).toBe(0.5);
+      expect(heard).toHaveBeenCalledTimes(5); // the UI and the audio follow every step
+      expect(saved).toHaveLength(0);
+      timer.fire();
+      expect(saved).toHaveLength(1);
+      expect(saved[0]?.settings.volume).toBe(0.5);
+    });
+
+    it('waits the agreed time and only one save is ever pending', () => {
+      const { profile, timer } = makeWithTimer();
+      profile.setVolume(0.9);
+      profile.setVolume(0.8);
+      const live = timer.waiting.filter((entry) => !entry.cancelled);
+      expect(live).toHaveLength(1);
+      expect(live[0]?.ms).toBe(SAVE_DELAY_MS);
+    });
+
+    it('saves a typed name later, and the final name at once when it is committed', () => {
+      const { profile, saved, timer } = makeWithTimer();
+      profile.typePlayerName('M');
+      profile.typePlayerName('Ma');
+      profile.typePlayerName('Mar');
+      expect(profile.data.playerName).toBe('Mar');
+      expect(saved).toHaveLength(0);
+      expect(profile.setPlayerName('Maria')).toBe('Maria');
+      expect(saved).toHaveLength(1);
+      expect(saved[0]?.playerName).toBe('Maria');
+      timer.fire();
+      expect(saved).toHaveLength(1); // the timer was cancelled by the immediate save
+    });
+
+    it('committing a name that was already typed saves it now', () => {
+      const { profile, saved, timer } = makeWithTimer();
+      profile.typePlayerName('Maria');
+      expect(saved).toHaveLength(0);
+      expect(profile.setPlayerName('Maria')).toBe('Maria');
+      expect(saved).toHaveLength(1);
+      timer.fire();
+      expect(saved).toHaveLength(1);
+    });
+
+    it('an immediate change also saves what was waiting', () => {
+      const { profile, saved, timer } = makeWithTimer({ version: 1, balance: 100 });
+      profile.setVolume(0.3);
+      profile.buy('ocean');
+      expect(saved).toHaveLength(1);
+      expect(saved[0]?.settings.volume).toBe(0.3);
+      expect(saved[0]?.balance).toBe(25);
+      timer.fire();
+      expect(saved).toHaveLength(1);
+    });
+
+    it('flush() writes the waiting change right away, and only when there is one', () => {
+      const { profile, saved, timer } = makeWithTimer();
+      profile.flush();
+      expect(saved).toHaveLength(0);
+      profile.setVolume(0.2);
+      profile.flush();
+      expect(saved).toHaveLength(1);
+      timer.fire();
+      profile.flush();
+      expect(saved).toHaveLength(1);
+    });
+
+    it('saves at once when there is no timer (tests, simple hosts)', () => {
+      const { profile, saved } = make();
+      profile.setVolume(0.2);
+      profile.typePlayerName('Ana');
+      expect(saved).toHaveLength(2);
+    });
   });
 });

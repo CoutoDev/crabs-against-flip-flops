@@ -1,6 +1,7 @@
 import './style.css';
 import { EventBus } from './application/event-bus';
 import { musicFor } from './application/music-policy';
+import { RepaintGate } from './application/repaint-gate';
 import { Profile } from './application/profile';
 import { GameFlow } from './application/game-flow';
 import { PlayerControls } from './application/player-controls';
@@ -49,6 +50,10 @@ const profile = new Profile(
     defaultSkin: DEFAULT_SKIN_ID,
   },
   SKINS,
+  (run, ms) => {
+    const id = setTimeout(run, ms);
+    return () => clearTimeout(id);
+  },
 );
 const bus = new EventBus<DomainEvent>();
 const flow = new GameFlow({
@@ -62,6 +67,14 @@ const controls = new PlayerControls(flow);
 const sfx = new WebAudioSfx();
 const music = new WebAudioMusic(() => sfx.graph);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const repaint = new RepaintGate();
+
+/** Runs `job` when the browser has nothing better to do (a timer where idle callbacks do not exist). */
+function whenIdle(job: () => void): void {
+  if ('requestIdleCallback' in window) window.requestIdleCallback(job, { timeout: 2000 });
+  else setTimeout(job, 200);
+}
+
 const effects = new Effects({
   rng: createRng(Math.floor(Math.random() * 0x100000000)),
   reducedMotion: () => reducedMotion.matches,
@@ -117,7 +130,7 @@ const view = new GameView(
         view.announce(translator.t('shop.nowUsing', { name: view.skinLabel(skinId) }));
       }
     },
-    typePlayerName: (name) => void profile.setPlayerName(name),
+    typePlayerName: (name) => profile.typePlayerName(name),
     commitPlayerName: (name) => profile.setPlayerName(name),
     resume: () => flow.resume(),
     pause: () => flow.pause(),
@@ -126,12 +139,14 @@ const view = new GameView(
       translator = createTranslator(locale);
       profile.setLocale(locale);
       hudKey = '';
+      repaint.invalidate(); // the HUD texts change, and nothing else would trigger a frame
       view.setTranslator(translator);
       refit();
     },
     toggleSound: () => profile.setMuted(!profile.data.settings.muted),
     toggleMusic: () => profile.setMusic(!profile.data.settings.music),
     setVolume: (volume) => profile.setVolume(volume),
+    commitVolume: () => profile.flush(),
   },
   icons,
 );
@@ -160,8 +175,16 @@ function campaignView(): CampaignView {
   };
 }
 
+let shopKey = '';
+let audioKey = '';
+
 function pushProfile(): void {
   const { balance, ownedSkins, equippedSkin, playerName } = profile.data;
+  // Typing a name or dragging the volume changes the profile many times a second: only redo the
+  // shop and name field when what they show actually changed.
+  const key = `${balance}|${ownedSkins.join(',')}|${equippedSkin}|${playerName}`;
+  if (key === shopKey) return;
+  shopKey = key;
   view.updateProfile(
     { balance, owned: ownedSkins, equipped: equippedSkin, skins: SKINS },
     playerName,
@@ -171,6 +194,9 @@ function pushProfile(): void {
 /** Sound, music and volume follow the saved settings, wherever they were changed. */
 function applyAudio(): void {
   const { muted, music: musicOn, volume } = profile.data.settings;
+  const key = `${muted}|${musicOn}|${volume}`;
+  if (key === audioKey) return;
+  audioKey = key;
   sfx.setMuted(muted);
   sfx.setVolume(volume);
   music.setEnabled(musicOn && !muted); // a muted game does not even schedule notes
@@ -226,9 +252,15 @@ document.addEventListener('click', (event) => {
 // A round must never keep running unseen: leaving the tab or window pauses it.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) flow.pause();
+  else repaint.invalidate(); // a hidden tab may have dropped the canvas contents
   applyMusic();
 });
 window.addEventListener('blur', () => flow.pause());
+// Changes that were waiting to be saved must not be lost when the page goes away.
+window.addEventListener('pagehide', () => profile.flush());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) profile.flush();
+});
 window.addEventListener('resize', refit);
 view.onLayoutChange(refit);
 
@@ -237,18 +269,34 @@ view.showScreen(flow.screen, flow.outcome, campaignView());
 applyMusic();
 refit();
 
+/** A long stall (slow device, tab switch) must not fast-forward the effects. */
+const MAX_EFFECT_AGE_MS = 100;
+
 startGameLoop((dtMs) => {
   const session = flow.session;
-  if (session === undefined) {
-    scene.renderBackdrop(frame, LEVELS[flow.levelIndex]?.biome ?? 'beach');
+  const biome = LEVELS[flow.levelIndex]?.biome ?? 'beach';
+  session?.advance(dtMs);
+  const state = session?.state;
+  const aim = controls.aimVisible ? controls.aim : undefined;
+
+  // Nothing is drawn unless something visible changed (see RepaintGate): the menu, the pause and
+  // the end screen cost nothing, and a 120 Hz screen does not redraw the same picture twice.
+  const elapsedMs = repaint.shouldRepaint(dtMs, {
+    state,
+    animating: flow.screen !== 'paused' && effects.active,
+    aim,
+    view: `${flow.screen}|${flow.levelIndex}|${biome}`,
+  });
+  if (elapsedMs === undefined) return;
+
+  if (state === undefined) {
+    scene.renderBackdrop(frame, biome);
   } else {
-    session.advance(dtMs);
-    if (flow.screen !== 'paused') effects.update(dtMs);
-    const state = session.state;
+    if (flow.screen !== 'paused') effects.update(Math.min(elapsedMs, MAX_EFFECT_AGE_MS));
     scene.render(frame, {
       state,
       effects,
-      aim: controls.aimVisible ? controls.aim : undefined,
+      aim,
       slipperSlots: slotsForSkin(profile.data.equippedSkin),
       trail: trailForSkin(profile.data.equippedSkin),
     });
@@ -260,3 +308,9 @@ startGameLoop((dtMs) => {
   }
   presenter.present();
 });
+
+// Draw the other biomes' scenery while the player is still on the menu, one per idle moment, so
+// choosing or reaching a new biome does not stall a frame on a slow phone.
+for (const biome of [...new Set(LEVELS.map((level) => level.biome))]) {
+  whenIdle(() => scene.prepare(biome));
+}

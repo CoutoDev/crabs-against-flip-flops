@@ -80,24 +80,45 @@ export class Framebuffer {
   }
 
   /**
-   * Moves the whole picture by whole pixels (screen shake). The edge that is uncovered repeats the
-   * outermost row or column, so no hole or flash of color appears.
+   * Moves the whole picture by whole pixels (screen shake), in place and without allocating
+   * (it runs on every frame of a shake). The edge that is uncovered repeats the outermost row or
+   * column, so no hole or flash of color appears.
    */
   shiftBy(dx: number, dy: number): void {
-    const shiftX = Math.round(dx);
-    const shiftY = Math.round(dy);
-    if (shiftX === 0 && shiftY === 0) return;
-    const source = this.data.slice();
+    // A shift past the frame already shows only the repeated edge, so limiting it changes nothing.
+    const shiftX = Math.max(1 - this.width, Math.min(this.width - 1, Math.round(dx)));
+    const shiftY = Math.max(1 - this.height, Math.min(this.height - 1, Math.round(dy)));
+    const rowBytes = this.width * 4;
+
+    if (shiftY > 0) {
+      this.data.copyWithin(shiftY * rowBytes, 0, (this.height - shiftY) * rowBytes);
+      for (let y = 0; y < shiftY; y += 1) {
+        this.data.copyWithin(y * rowBytes, shiftY * rowBytes, (shiftY + 1) * rowBytes);
+      }
+    } else if (shiftY < 0) {
+      const up = -shiftY;
+      this.data.copyWithin(0, up * rowBytes, this.height * rowBytes);
+      const last = (this.height - 1 - up) * rowBytes;
+      for (let y = this.height - up; y < this.height; y += 1) {
+        this.data.copyWithin(y * rowBytes, last, last + rowBytes);
+      }
+    }
+
+    if (shiftX === 0) return;
     for (let y = 0; y < this.height; y += 1) {
-      const sy = Math.min(this.height - 1, Math.max(0, y - shiftY));
-      for (let x = 0; x < this.width; x += 1) {
-        const sx = Math.min(this.width - 1, Math.max(0, x - shiftX));
-        const from = (sy * this.width + sx) * 4;
-        const to = (y * this.width + x) * 4;
-        this.data[to] = source[from] ?? 0;
-        this.data[to + 1] = source[from + 1] ?? 0;
-        this.data[to + 2] = source[from + 2] ?? 0;
-        this.data[to + 3] = source[from + 3] ?? 255;
+      const row = y * rowBytes;
+      if (shiftX > 0) {
+        const move = shiftX * 4;
+        this.data.copyWithin(row + move, row, row + rowBytes - move);
+        for (let x = 0; x < shiftX; x += 1)
+          this.data.copyWithin(row + x * 4, row + move, row + move + 4);
+      } else {
+        const move = -shiftX * 4;
+        this.data.copyWithin(row, row + move, row + rowBytes);
+        const last = row + rowBytes - move - 4;
+        for (let x = this.width + shiftX; x < this.width; x += 1) {
+          this.data.copyWithin(row + x * 4, last, last + 4);
+        }
       }
     }
   }

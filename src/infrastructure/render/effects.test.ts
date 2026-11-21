@@ -8,6 +8,7 @@ import {
   FLOATER_TTL_MS,
   HIT_PARTICLES,
   HIT_PARTICLES_REDUCED,
+  MILESTONE_TTL_MS,
   MAX_PARTICLES,
   PARTICLE_TTL_MS,
   PUFF_TTL_MS,
@@ -192,6 +193,27 @@ describe('Effects: particles, shake and confetti', () => {
       reduced = true;
       effects.handle(hit());
       expect(effects.particles).toHaveLength(HIT_PARTICLES_REDUCED);
+    });
+  });
+
+  describe('active', () => {
+    it('is false when nothing is going on', () => {
+      expect(effectsWith().active).toBe(false);
+    });
+
+    it('is true while anything is moving or fading, and false once it is all gone', () => {
+      const effects = effectsWith();
+      effects.handle(hit());
+      expect(effects.active).toBe(true);
+      effects.update(5000);
+      expect(effects.active).toBe(false);
+    });
+
+    it('stays true during a shake even without particles', () => {
+      const effects = effectsWith(false);
+      effects.handle({ type: 'ScoreMilestone', milestone: 100, score: 100 });
+      effects.update(MILESTONE_TTL_MS + 50); // the pop is gone, the shake (225 ms) is over too
+      expect(effects.active).toBe(false);
     });
   });
 

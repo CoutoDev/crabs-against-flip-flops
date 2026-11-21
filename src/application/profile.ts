@@ -6,6 +6,12 @@ import { sanitizePlayerName } from './player-name';
 import type { ProgressRepository } from './ports/progress-repository';
 import { parseSave, type SaveDataV1, type SaveRules } from './save-data';
 
+/** Runs `run` after `ms` milliseconds and returns a function that cancels it. */
+export type Later = (run: () => void, ms: number) => () => void;
+
+/** How long a burst of changes (typing a name, dragging the volume) waits before one single save. */
+export const SAVE_DELAY_MS = 400;
+
 /**
  * The player's persistent data (name, points, campaign progress, skins, settings). It is the only
  * writer of the save: every change is applied here, then stored, then listeners are told.
@@ -13,11 +19,14 @@ import { parseSave, type SaveDataV1, type SaveRules } from './save-data';
 export class Profile {
   private current: SaveDataV1;
   private listeners: readonly (() => void)[] = [];
+  private cancelPendingSave: (() => void) | undefined;
 
   constructor(
     private readonly repository: ProgressRepository,
     rules: SaveRules,
     private readonly catalog: SkinCatalog,
+    /** Without it every change is saved at once; the browser passes a timer to coalesce bursts. */
+    private readonly later?: Later,
   ) {
     this.current = parseSave(repository.load(), rules);
   }
@@ -75,7 +84,22 @@ export class Profile {
   setPlayerName(name: string): string {
     const playerName = sanitizePlayerName(name);
     if (playerName !== this.current.playerName) this.update({ playerName });
+    else this.flush(); // typed already (kept in memory): committing it means saving it now
     return playerName;
+  }
+
+  /** The name while it is being typed: kept in memory at once, saved once the typing pauses. */
+  typePlayerName(name: string): void {
+    const playerName = sanitizePlayerName(name);
+    if (playerName !== this.current.playerName) this.update({ playerName }, 'later');
+  }
+
+  /** Writes any change that is still waiting. Call it when the page is being left. */
+  flush(): void {
+    if (this.cancelPendingSave === undefined) return;
+    this.cancelPendingSave();
+    this.cancelPendingSave = undefined;
+    this.repository.save(this.current);
   }
 
   setLocale(locale: Locale): void {
@@ -100,7 +124,7 @@ export class Profile {
   setVolume(volume: number): void {
     const clamped = Math.min(1, Math.max(0, Number.isFinite(volume) ? volume : 1));
     if (this.current.settings.volume !== clamped) {
-      this.update({ settings: { ...this.current.settings, volume: clamped } });
+      this.update({ settings: { ...this.current.settings, volume: clamped } }, 'later');
     }
   }
 
@@ -115,9 +139,22 @@ export class Profile {
     return undefined;
   }
 
-  private update(changes: Partial<SaveDataV1>): void {
+  /**
+   * `'now'` saves at once (and also what was waiting: it is the same snapshot); `'later'` saves
+   * after a pause in the changes. Listeners hear about it either way, so the UI never lags.
+   */
+  private update(changes: Partial<SaveDataV1>, when: 'now' | 'later' = 'now'): void {
     this.current = { ...this.current, ...changes };
-    this.repository.save(this.current);
+    this.cancelPendingSave?.();
+    this.cancelPendingSave = undefined;
+    if (when === 'later' && this.later !== undefined) {
+      this.cancelPendingSave = this.later(() => {
+        this.cancelPendingSave = undefined;
+        this.repository.save(this.current);
+      }, SAVE_DELAY_MS);
+    } else {
+      this.repository.save(this.current);
+    }
     for (const listener of this.listeners) listener();
   }
 }

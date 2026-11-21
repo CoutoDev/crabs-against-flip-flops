@@ -156,6 +156,17 @@ describe('Scene', () => {
     });
   });
 
+  it('prepare() draws a biome ahead of time without changing what is shown later', () => {
+    const prepared = new Scene();
+    const lazy = new Scene();
+    prepared.prepare('night');
+    const a = newFrame();
+    const b = newFrame();
+    prepared.renderBackdrop(a, 'night');
+    lazy.renderBackdrop(b, 'night');
+    expect(a.data).toEqual(b.data);
+  });
+
   it('renders every biome without throwing', () => {
     const scene = new Scene();
     for (const biome of ['beach', 'rocks', 'mangrove', 'night'] as const) {
