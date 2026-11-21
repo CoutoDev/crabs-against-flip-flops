@@ -1,6 +1,9 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-export type ScreenName = 'menu' | 'briefing' | 'playing' | 'paused' | 'ended';
+/** Where the game keeps its save (src/infrastructure/storage). */
+const SAVE_KEY = 'crabs-against-flip-flops:save';
+
+export type ScreenName = 'menu' | 'shop' | 'briefing' | 'playing' | 'paused' | 'ended';
 
 interface Point {
   readonly x: number;
@@ -56,6 +59,21 @@ export class GamePage {
     });
     this.problems = problems;
     await this.page.goto('./');
+    await expect(this.canvas).toBeVisible();
+  }
+
+  /** Replaces the stored save (as an older visit would have left it) and reloads the page. */
+  async seedSave(save: unknown): Promise<void> {
+    await this.page.evaluate(
+      ([key, value]) => window.localStorage.setItem(key as string, value as string),
+      [SAVE_KEY, typeof save === 'string' ? save : JSON.stringify(save)],
+    );
+    await this.page.reload();
+    await expect(this.canvas).toBeVisible();
+  }
+
+  async reload(): Promise<void> {
+    await this.page.reload();
     await expect(this.canvas).toBeVisible();
   }
 

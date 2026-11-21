@@ -1,9 +1,11 @@
 import './style.css';
 import { EventBus } from './application/event-bus';
+import { Profile } from './application/profile';
 import { GameFlow } from './application/game-flow';
 import { PlayerControls } from './application/player-controls';
 import { CRAB_TYPES } from './data/crab-types';
 import { LEVELS } from './data/levels';
+import { DEFAULT_SKIN_ID, SKINS } from './data/skins';
 import { FIELD_HEIGHT_PX, FIELD_WIDTH_PX } from './domain/constants';
 import type { DomainEvent } from './domain/events';
 import { bindSfx } from './infrastructure/audio/bind-sfx';
@@ -14,10 +16,15 @@ import { CanvasPresenter } from './infrastructure/render/canvas-presenter';
 import { Effects } from './infrastructure/render/effects';
 import { Framebuffer } from './infrastructure/render/framebuffer';
 import { Scene } from './infrastructure/render/scene';
+import { slotsForSkin } from './infrastructure/render/skin-slots';
+import {
+  browserStorage,
+  LocalStorageProgressRepository,
+} from './infrastructure/storage/local-storage-progress-repository';
 import { spriteToCanvas } from './infrastructure/render/sprite-canvas';
 import { SPRITES } from './infrastructure/render/sprites';
 import { announcementFor } from './ui/announce';
-import { GameView, type CampaignView, type CrabIcons } from './ui/game-view';
+import { GameView, type CampaignView, type ViewIcons } from './ui/game-view';
 import { buildHud } from './ui/hud-model';
 import { detectLocale } from './ui/i18n/detect-locale';
 import { createTranslator } from './ui/i18n/translator';
@@ -31,8 +38,18 @@ import { createTranslator } from './ui/i18n/translator';
 const root = document.querySelector<HTMLElement>('#app');
 if (root === null) throw new Error('Missing #app root element');
 
+const profile = new Profile(
+  new LocalStorageProgressRepository(browserStorage),
+  {
+    levelIds: LEVELS.map((level) => level.id),
+    skinIds: SKINS.map((skin) => skin.id),
+    defaultSkin: DEFAULT_SKIN_ID,
+  },
+  SKINS,
+);
 const bus = new EventBus<DomainEvent>();
 const flow = new GameFlow({
+  progress: profile.progress,
   levels: LEVELS,
   crabSpecs: CRAB_TYPES,
   newSeed: () => Math.floor(Math.random() * 0x100000000),
@@ -44,14 +61,17 @@ const effects = new Effects();
 const scene = new Scene();
 const frame = new Framebuffer(FIELD_WIDTH_PX, FIELD_HEIGHT_PX);
 
-let translator = createTranslator(detectLocale(navigator.languages));
-let muted = false;
+let translator = createTranslator(
+  profile.data.settings.locale ?? detectLocale(navigator.languages),
+);
+let muted = profile.data.settings.muted;
+sfx.setMuted(muted);
 let hudKey = '';
 
-const crabIcons: CrabIcons = {
-  common: () => spriteToCanvas(SPRITES.crabs.common[0]),
-  swimmer: () => spriteToCanvas(SPRITES.crabs.swimmer[0]),
-  fiddler: () => spriteToCanvas(SPRITES.crabs.fiddler[0]),
+const icons: ViewIcons = {
+  crab: (type) => spriteToCanvas(SPRITES.crabs[type][0]),
+  // The flip flop lying flat (rotated) so it reads as a shoe in the shop.
+  skin: (skinId) => spriteToCanvas(SPRITES.slipper[1], slotsForSkin(skinId)),
 };
 
 const view = new GameView(
@@ -77,11 +97,26 @@ const view = new GameView(
       flow.next();
     },
     selectLevel: (index) => flow.select(index),
+    openShop: () => flow.openShop(),
+    closeShop: () => flow.closeShop(),
+    buySkin: (skinId) => {
+      if (profile.buy(skinId) === undefined) {
+        view.announce(translator.t('shop.bought', { name: view.skinLabel(skinId) }));
+      }
+    },
+    equipSkin: (skinId) => {
+      if (profile.equip(skinId) === undefined) {
+        view.announce(translator.t('shop.nowUsing', { name: view.skinLabel(skinId) }));
+      }
+    },
+    typePlayerName: (name) => void profile.setPlayerName(name),
+    commitPlayerName: (name) => profile.setPlayerName(name),
     resume: () => flow.resume(),
     pause: () => flow.pause(),
     toMenu: () => flow.toMenu(),
     setLocale: (locale) => {
       translator = createTranslator(locale);
+      profile.setLocale(locale);
       hudKey = '';
       view.setTranslator(translator, muted);
       refit();
@@ -89,10 +124,11 @@ const view = new GameView(
     toggleSound: () => {
       muted = !muted;
       sfx.setMuted(muted);
+      profile.setMuted(muted);
       view.setTranslator(translator, muted);
     },
   },
-  crabIcons,
+  icons,
 );
 const presenter = new CanvasPresenter(view.canvas, frame);
 
@@ -118,6 +154,19 @@ function campaignView(): CampaignView {
     crabs: (level?.crabs ?? []).map(({ type }) => ({ type, points: CRAB_TYPES[type].points })),
   };
 }
+
+function pushProfile(): void {
+  const { balance, ownedSkins, equippedSkin, playerName } = profile.data;
+  view.updateProfile(
+    { balance, owned: ownedSkins, equipped: equippedSkin, skins: SKINS },
+    playerName,
+  );
+}
+
+profile.onChange(pushProfile);
+pushProfile();
+// The points of a round and the campaign progress are saved the moment the round ends.
+flow.onRoundEnd((outcome) => profile.recordRound(outcome.score, flow.progress));
 
 flow.onChange(() => {
   hudKey = ''; // another level changes the goal and the level number, not just the score
@@ -161,6 +210,7 @@ startGameLoop((dtMs) => {
       state,
       effects,
       aim: controls.aimVisible ? controls.aim : undefined,
+      slipperSlots: slotsForSkin(profile.data.equippedSkin),
     });
     const key = `${state.score}|${state.ammo}|${state.combo}`;
     if (key !== hudKey) {

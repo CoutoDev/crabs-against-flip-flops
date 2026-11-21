@@ -5,9 +5,9 @@ import type { Sprite } from './sprite';
  * Draws a sprite on its own small canvas, for DOM screens that show the art (the level briefing).
  * Same pixels as the game field; the page scales it with `image-rendering: pixelated`.
  */
-export function spriteToCanvas(sprite: Sprite): HTMLCanvasElement {
+export function spriteToCanvas(sprite: Sprite, slots?: readonly number[]): HTMLCanvasElement {
   const frame = new Framebuffer(sprite.width, sprite.height);
-  frame.blit(sprite, 0, 0);
+  frame.blit(sprite, 0, 0, slots === undefined ? {} : { slots });
   const canvas = document.createElement('canvas');
   canvas.width = sprite.width;
   canvas.height = sprite.height;

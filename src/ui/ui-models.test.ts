@@ -6,6 +6,8 @@ import { createRound, type RoundState } from '../domain/rules/round';
 import { makeLevel, TEST_CRAB_SPECS } from '../domain/test-support';
 import { announcementFor } from './announce';
 import { CRAB_TYPE_IDS } from '../domain/entities/crab';
+import { SKINS } from '../data/skins';
+import { skinName } from './shop-view';
 import { canvasLabelKey, crabNameKey, levelName } from './campaign-text';
 import { buildHud, LOW_AMMO_THRESHOLD } from './hud-model';
 import { createTranslator } from './i18n/translator';
@@ -101,6 +103,17 @@ describe('announcementFor', () => {
       { type: 'RoundLost', score: 1 },
     ];
     for (const event of quiet) expect(announcementFor(event, en), event.type).toBeUndefined();
+  });
+});
+
+describe('shop text', () => {
+  it.each(LOCALES)('%s names every skin of the catalog', (locale) => {
+    const translator = createTranslator(locale);
+    const names = SKINS.map((skin) => skinName(translator, skin.id));
+    for (const [index, name] of names.entries()) {
+      expect(name, SKINS[index]?.id).not.toMatch(/^skins\./);
+    }
+    expect(new Set(names).size).toBe(SKINS.length);
   });
 });
 
