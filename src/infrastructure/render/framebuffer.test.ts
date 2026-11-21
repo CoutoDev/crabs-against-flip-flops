@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Framebuffer } from './framebuffer';
 import { COLOR, PALETTE_RGB } from './palette';
 import { parseSprite } from './sprite';
@@ -114,6 +114,46 @@ describe('Framebuffer.blit', () => {
       fb.shiftBy(2, 0);
       expect(fb.rgbAt(0, 1)).toEqual(PALETTE_RGB[0]);
       for (let i = 3; i < fb.data.length; i += 4) expect(fb.data[i]).toBe(255);
+    });
+
+    it('gives exactly the same picture as "read each pixel from its clamped source"', () => {
+      const width = 7;
+      const height = 5;
+      const make = () => {
+        const fb = new Framebuffer(width, height);
+        for (let y = 0; y < height; y += 1) {
+          for (let x = 0; x < width; x += 1) fb.setPixel(x, y, (x * 3 + y * 5) % 16);
+        }
+        return fb;
+      };
+      const reference = (dx: number, dy: number) => {
+        const source = make();
+        const out = new Framebuffer(width, height);
+        for (let y = 0; y < height; y += 1) {
+          for (let x = 0; x < width; x += 1) {
+            const sx = Math.min(width - 1, Math.max(0, x - dx));
+            const sy = Math.min(height - 1, Math.max(0, y - dy));
+            const [r, g, b] = source.rgbAt(sx, sy);
+            const at = (y * width + x) * 4;
+            out.data.set([r, g, b, 255], at);
+          }
+        }
+        return out;
+      };
+      for (let dy = -7; dy <= 7; dy += 1) {
+        for (let dx = -9; dx <= 9; dx += 1) {
+          const fb = make();
+          fb.shiftBy(dx, dy);
+          expect(fb.data, `shift (${dx}, ${dy})`).toEqual(reference(dx, dy).data);
+        }
+      }
+    });
+
+    it('does not allocate a copy of the frame (it runs on every shaken frame)', () => {
+      const fb = new Framebuffer(8, 8);
+      const slice = vi.spyOn(fb.data, 'slice');
+      fb.shiftBy(2, -3);
+      expect(slice).not.toHaveBeenCalled();
     });
 
     it('moves vertically too, and does nothing for a zero shift', () => {

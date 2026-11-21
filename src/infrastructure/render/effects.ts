@@ -95,6 +95,16 @@ export class Effects {
     return this.puffList;
   }
 
+  /** True while anything is moving or fading: the picture has to keep being redrawn. */
+  get active(): boolean {
+    return (
+      this.floaterList.length > 0 ||
+      this.puffList.length > 0 ||
+      this.particleList.length > 0 ||
+      this.shakeLeftMs > 0
+    );
+  }
+
   get particles(): readonly Particle[] {
     return this.particleList;
   }
