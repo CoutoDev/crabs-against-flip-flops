@@ -4,7 +4,7 @@
 
 **PT-BR** — Minigame 8 bits de navegador: arremesse chinelos em caranguejos e siris que cruzam praias e manguezais, ganhe pontos, avance por níveis mais difíceis e gaste os pontos em skins de chinelo. Disponível em português (Brasil) e inglês. O progresso é salvo localmente no navegador (sem conta).
 
-> Status: **M2 (first playable level)** — one level is playable end to end (mouse, touch and keyboard; English and Portuguese; sound effects). Campaign, shop and saved progress come next. / um nível já é jogável de ponta a ponta (mouse, toque e teclado; português e inglês; efeitos sonoros). Campanha, loja e progresso salvo vêm a seguir.
+> Status: **M2 (first playable level)** — one level is playable end to end, portrait layout for phones (mouse, touch and keyboard; English and Portuguese; sound effects). Campaign, shop and saved progress come next. / um nível já é jogável de ponta a ponta (mouse, toque e teclado; português e inglês; efeitos sonoros). Campanha, loja e progresso salvo vêm a seguir.
 
 ## How to play / Como jogar
 
@@ -14,7 +14,7 @@
 
 ## Development / Desenvolvimento
 
-Requires Node.js 20+ (CI uses 22).
+Requires Node.js 20+ (CI uses 22). First time running the browser tests: `npx playwright install chromium` (or set `PW_CHROME_PATH` to an installed Chrome/Chromium).
 
 ```bash
 npm install
@@ -24,6 +24,7 @@ npm run lint         # ESLint
 npm run typecheck    # tsc --noEmit
 npm run format       # Prettier
 npm run build        # typecheck + production build in dist/
+npm run test:e2e     # browser tests (Playwright, builds and serves dist/ itself)
 ```
 
 ## Deploy (GitHub Pages)
@@ -34,7 +35,7 @@ O navegador não executa `.ts`, então o site é **compilado** pelo Vite e só o
 
 ## Architecture / Arquitetura
 
-Clean-architecture layers (`domain` → `application` → `infrastructure`/`ui`), fixed-timestep simulation, 320×180 pixel canvas, chiptune audio synthesized with WebAudio, levels and skins as data, `localStorage` behind a repository port. Full rationale and roadmap in [`docs/adr/0001-arquitetura.md`](docs/adr/0001-arquitetura.md).
+Clean-architecture layers (`domain` → `application` → `infrastructure`/`ui`), fixed-timestep simulation, 180×320 portrait pixel canvas (fills a phone held upright, centered on desktop), chiptune audio synthesized with WebAudio, levels and skins as data, `localStorage` behind a repository port. Full rationale and roadmap in [`docs/adr/0001-arquitetura.md`](docs/adr/0001-arquitetura.md).
 
 ## Notes
 

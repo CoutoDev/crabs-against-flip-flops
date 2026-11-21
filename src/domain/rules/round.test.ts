@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { STEP_MS, THROW_ORIGIN } from '../constants';
+import { FIELD_HEIGHT_PX, FIELD_WIDTH_PX, STEP_MS, THROW_ORIGIN } from '../constants';
 import type { SlipperFlight } from '../entities/slipper';
 import type { DomainEvent } from '../events';
 import type { Vec2 } from '../geometry';
@@ -71,7 +71,7 @@ describe('throwSlipper', () => {
 
   it('clamps the target to the field', () => {
     const { state } = throwSlipper(quietRound(), { x: -50, y: 999 });
-    expect(must(state.flights[0]).target).toEqual({ x: 0, y: 180 });
+    expect(must(state.flights[0]).target).toEqual({ x: 0, y: FIELD_HEIGHT_PX });
   });
 
   it('rejects non-finite targets as a programming error', () => {
@@ -283,7 +283,7 @@ describe('determinism', () => {
   const simulate = (seed: number): RoundState => {
     let state = createRound(configOf(makeLevel({ ammo: 20, targetScore: 600 })), seed);
     for (let i = 0; i < 600; i += 1) {
-      if (i % 45 === 0) state = throwSlipper(state, { x: (i * 7) % 320, y: 100 }).state;
+      if (i % 45 === 0) state = throwSlipper(state, { x: (i * 7) % FIELD_WIDTH_PX, y: 100 }).state;
       state = step(state, STEP_MS).state;
     }
     return state;

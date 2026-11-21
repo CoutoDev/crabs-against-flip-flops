@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FIELD_HEIGHT_PX, FIELD_WIDTH_PX } from '../domain/constants';
 import { AIM_FAST_STEP_PX, AIM_STEP_PX, DEFAULT_AIM, moveAim } from './aim';
 
 describe('moveAim', () => {
@@ -15,12 +16,16 @@ describe('moveAim', () => {
 
   it('stays inside the field', () => {
     expect(moveAim({ x: 2, y: 2 }, -1, -1, AIM_STEP_PX)).toEqual({ x: 0, y: 0 });
-    expect(moveAim({ x: 318, y: 178 }, 1, 1, AIM_STEP_PX)).toEqual({ x: 320, y: 180 });
+    expect(moveAim({ x: FIELD_WIDTH_PX - 2, y: FIELD_HEIGHT_PX - 2 }, 1, 1, AIM_STEP_PX)).toEqual({
+      x: FIELD_WIDTH_PX,
+      y: FIELD_HEIGHT_PX,
+    });
   });
 
   it('starts at a sensible spot over the beach', () => {
-    expect(DEFAULT_AIM.x).toBe(160);
-    expect(DEFAULT_AIM.y).toBeGreaterThan(80);
-    expect(DEFAULT_AIM.y).toBeLessThan(150);
+    expect(DEFAULT_AIM.x).toBe(FIELD_WIDTH_PX / 2);
+    // inside the band where the crabs walk (data/levels.ts: laneY 150-270)
+    expect(DEFAULT_AIM.y).toBeGreaterThan(150);
+    expect(DEFAULT_AIM.y).toBeLessThan(270);
   });
 });

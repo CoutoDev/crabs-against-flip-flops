@@ -21,11 +21,13 @@ body {
   margin: 0;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 0.75rem;
+  padding: 0.5rem;
   background: var(--ink);
   color: var(--sand);
   font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   line-height: 1.4;
+  /* A finger dragging on the field must not pull-to-refresh or bounce the page. */
+  overscroll-behavior: none;
 }
 
 #app {
@@ -33,49 +35,22 @@ body {
   justify-items: center;
 }
 
+/* The field is portrait: a phone held upright shows it as large as it can be. */
 .game {
   display: grid;
-  gap: 0.6rem;
+  gap: 0.4rem;
   justify-items: center;
   width: 100%;
   max-width: 100%;
 }
 
-/* ── Top bar ───────────────────────────────────────────────────────────────────────────── */
-.topbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-}
-
-.topbar__title {
-  margin: 0;
-  font-size: clamp(1.1rem, 4vw, 1.6rem);
-  color: var(--sun);
-}
-
-.topbar__controls,
-.locale-switcher {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  align-items: center;
-  justify-content: center;
-}
-
-.locale-switcher__label {
-  font-size: 0.85rem;
-}
-
-/* ── Buttons (large enough to tap: 44 px minimum target) ────────────────────────────────── */
+/* ── Buttons (44 px minimum touch target) ───────────────────────────────────────────────── */
 .control {
   min-height: 44px;
   min-width: 44px;
-  padding: 0.4rem 0.9rem;
+  padding: 0.3rem 0.8rem;
   font: inherit;
+  font-size: 0.9rem;
   color: var(--sand);
   background: transparent;
   border: 2px solid var(--sand);
@@ -96,10 +71,18 @@ body {
   border-color: var(--ink);
   color: var(--ink);
   font-weight: bold;
+  font-size: 1rem;
+  min-width: 9rem;
 }
 
 .control--primary:hover:not(:disabled) {
   background: var(--sun);
+}
+
+.control--square {
+  padding: 0;
+  font-weight: bold;
+  letter-spacing: -0.1em;
 }
 
 .control:disabled {
@@ -112,33 +95,36 @@ body {
   outline-offset: 2px;
 }
 
-/* ── HUD ───────────────────────────────────────────────────────────────────────────────── */
+/* ── HUD: the only fixed chrome, one compact row plus the progress bar ───────────────────── */
 .hud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 1.2rem;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  gap: 0.2rem 0.5rem;
   align-items: center;
-  justify-content: center;
   width: 100%;
+  max-width: 30rem;
 }
 
 .hud__item {
   display: flex;
-  gap: 0.4rem;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: center;
   /* Same height with or without text yet, so the layout (and the canvas scale) never jumps. */
-  min-height: 1.6rem;
+  min-height: 2.4rem;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .hud__label {
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   opacity: 0.85;
 }
 
 .hud__value {
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: bold;
   color: var(--white);
+  white-space: nowrap;
 }
 
 .hud__item--level .hud__value {
@@ -149,14 +135,9 @@ body {
   color: var(--coral);
 }
 
-.hud__break {
-  flex-basis: 100%;
-  height: 0;
-}
-
 .hud__progress {
+  grid-column: 1 / -1;
   width: 100%;
-  max-width: 28rem;
   height: 0.6rem;
   appearance: none;
   border: 2px solid var(--sand);
@@ -193,6 +174,7 @@ body {
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   cursor: crosshair;
 }
 
@@ -210,15 +192,17 @@ body {
   gap: 0.6rem;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 0.75rem;
+  overflow: auto;
   text-align: center;
   line-height: 1.4;
-  background: color-mix(in srgb, var(--ink) 82%, transparent);
+  background: color-mix(in srgb, var(--ink) 84%, transparent);
 }
 
 .overlay__title {
   margin: 0;
-  font-size: clamp(1.1rem, 4vw, 1.8rem);
+  font-size: clamp(1.1rem, 5vw, 1.6rem);
+  line-height: 1.2;
   color: var(--sun);
 }
 
@@ -228,15 +212,78 @@ body {
 
 .overlay__text {
   margin: 0;
-  max-width: 24rem;
+  max-width: 18rem;
+  font-size: 0.9rem;
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.4rem;
+}
+
+.settings__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings__label {
+  width: 100%;
+  font-size: 0.75rem;
+  opacity: 0.85;
 }
 
 .help {
   margin: 0;
-  max-width: 44rem;
-  font-size: 0.8rem;
+  max-width: 30rem;
+  font-size: 0.75rem;
   text-align: center;
   opacity: 0.85;
+}
+
+/* On a touch screen the keyboard instructions are noise; the field is what matters. */
+@media (pointer: coarse) {
+  .help {
+    display: none;
+  }
+}
+
+/* A phone on its side: the HUD moves next to the field, so the field keeps the full height. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .game {
+    grid-template-columns: auto auto;
+    align-items: start;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+
+  .hud {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3rem;
+    width: 9rem;
+  }
+
+  .hud__item {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    min-height: 1.5rem;
+  }
+
+  .hud__label {
+    font-size: 0.75rem;
+  }
+
+  .help {
+    display: none;
+  }
 }
 
 /* Visible to screen readers only. */
@@ -250,43 +297,6 @@ body {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
-}
-
-/* Phones: tighter controls (the 44 px touch target stays) so the field comes first. */
-@media (max-width: 480px) {
-  body {
-    padding: 0.5rem;
-  }
-
-  .game {
-    gap: 0.4rem;
-  }
-
-  .topbar {
-    gap: 0.3rem 0.6rem;
-  }
-
-  .topbar__controls,
-  .locale-switcher {
-    gap: 0.3rem;
-  }
-
-  .control {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.85rem;
-  }
-
-  .hud {
-    gap: 0.2rem 0.7rem;
-  }
-
-  .hud__value {
-    font-size: 1rem;
-  }
-
-  .help {
-    font-size: 0.75rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
