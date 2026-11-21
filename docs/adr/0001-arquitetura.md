@@ -49,16 +49,20 @@ src/
     constants.ts     campo 320×180, origem do arremesso, raio do chinelo, STEP_MS
     rules/           trajetória, colisão, pontuação, caranguejos, validação de nível, rodada (createRound/throwSlipper/step), loja
     events.ts        eventos de domínio (SlipperThrown, CrabHit, SlipperMissed, ScoreMilestone, LevelCleared, RoundLost, SkinPurchased)
-  application/       casos de uso + portas
-    use-cases/       StartLevel, ThrowSlipper, TickSimulation, PurchaseSkin, EquipSkin
-    ports/           ProgressRepository, EventBus
+  application/       orquestração, sem DOM (testada no Vitest)
+    event-bus.ts     pub/sub síncrono dos eventos de domínio
+    game-session.ts  uma rodada: timestep fixo 60 Hz + acumulador, publica eventos
+    game-flow.ts     telas (menu, jogando, pausa, fim) e resultado da rodada
+    player-controls.ts  comandos do jogador (teclado/mouse/toque) → ações; aim.ts, viewport.ts
     locale.ts        Locale, LOCALES, DEFAULT_LOCALE
+    (M4) use-cases/ e ports/ProgressRepository entram junto da persistência
   infrastructure/    adaptadores
-    storage/         LocalStorageProgressRepository (+ validação e migração de schema)
-    audio/           WebAudioSfx (assina eventos de domínio)
-    render/          CanvasRenderer (pixel art a partir de matrizes + paleta)
-    input/           PointerInput, KeyboardInput
-  ui/                telas DOM (menu, loja, pausa, fim de rodada), HUD e i18n
+    render/          palette, sprite(s), framebuffer, font, effects, background, scene, canvas-presenter
+    audio/           sfx-specs, sfx-for-event, web-audio-sfx, bind-sfx
+    input/           keyboard-commands (puro), dom-input (listeners)
+    browser/         game-loop (requestAnimationFrame com scheduler injetável)
+    storage/         (M4) LocalStorageProgressRepository (+ validação e migração de schema)
+  ui/                DOM (game-view: barra, HUD, diálogos), modelos puros (hud-model, announce) e i18n
     i18n/            catálogos tipados (messages/en.ts é a fonte), Translator, detectLocale
   data/              levels.ts, skins.ts (dados, não código)
 ```
@@ -133,8 +137,8 @@ interface SaveDataV1 {
 ## 7. Pendências
 
 1. **Catálogo de skins e preços:** proposta no M4, a aprovar antes de implementar (D15).
-2. **Hospedagem:** site estático (ex.: GitHub Pages) depois do MVP. O build já usa `base: './'`.
-3. **Licença:** a definir antes de tornar o repositório público. Sem licença, o código fica com todos os direitos reservados.
+2. **Hospedagem:** resolvido. GitHub Pages via GitHub Actions (`deploy.yml`), build com `base: './'`.
+3. **Licença:** em aberto e urgente: o repositório já é público e sem licença, o que deixa todos os direitos reservados (ninguém pode legalmente reutilizar o código). Escolher uma licença (ex.: MIT) ou manter fechado de propósito.
 
 ## 8. Plano de marcos
 
