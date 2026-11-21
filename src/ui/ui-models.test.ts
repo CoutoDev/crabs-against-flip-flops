@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { LOCALES } from '../application/locale';
+import { LEVELS } from '../data/levels';
 import type { DomainEvent } from '../domain/events';
 import { createRound, type RoundState } from '../domain/rules/round';
 import { makeLevel, TEST_CRAB_SPECS } from '../domain/test-support';
 import { announcementFor } from './announce';
+import { canvasLabelKey, levelName } from './campaign-text';
 import { buildHud, LOW_AMMO_THRESHOLD } from './hud-model';
 import { createTranslator } from './i18n/translator';
 
@@ -92,5 +95,23 @@ describe('announcementFor', () => {
       { type: 'RoundLost', score: 1 },
     ];
     for (const event of quiet) expect(announcementFor(event, en), event.type).toBeUndefined();
+  });
+});
+
+describe('campaign text', () => {
+  it.each(LOCALES)('%s names every level of the campaign', (locale) => {
+    const translator = createTranslator(locale);
+    for (const level of LEVELS) {
+      expect(levelName(translator, level.id), `level ${level.id}`).not.toBe(
+        `levels.${level.id}.name`,
+      );
+      expect(levelName(translator, level.id).length).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(LOCALES)('%s describes the field of every biome', (locale) => {
+    const translator = createTranslator(locale);
+    const labels = new Set(LEVELS.map((level) => translator.t(canvasLabelKey(level.biome))));
+    expect(labels.size).toBe(new Set(LEVELS.map((level) => level.biome)).size);
   });
 });

@@ -15,7 +15,7 @@ import { Effects } from './infrastructure/render/effects';
 import { Framebuffer } from './infrastructure/render/framebuffer';
 import { Scene } from './infrastructure/render/scene';
 import { announcementFor } from './ui/announce';
-import { GameView } from './ui/game-view';
+import { GameView, type CampaignView } from './ui/game-view';
 import { buildHud } from './ui/hud-model';
 import { detectLocale } from './ui/i18n/detect-locale';
 import { createTranslator } from './ui/i18n/translator';
@@ -52,6 +52,12 @@ const view = new GameView(root, {
     effects.clear();
     flow.play();
   },
+  next: () => {
+    void sfx.unlock();
+    effects.clear();
+    flow.next();
+  },
+  selectLevel: (index) => flow.select(index),
   resume: () => flow.resume(),
   pause: () => flow.pause(),
   toMenu: () => flow.toMenu(),
@@ -81,8 +87,18 @@ bus.subscribe((event) => {
   if (message !== undefined) view.announce(message);
 });
 
+function campaignView(): CampaignView {
+  return {
+    levelIds: LEVELS.map((level) => level.id),
+    selected: flow.levelIndex,
+    highestUnlocked: flow.highestUnlockedIndex,
+    biome: LEVELS[flow.levelIndex]?.biome ?? 'beach',
+  };
+}
+
 flow.onChange(() => {
-  view.showScreen(flow.screen, flow.outcome);
+  hudKey = ''; // another level changes the goal and the level number, not just the score
+  view.showScreen(flow.screen, flow.outcome, campaignView());
   refit();
 });
 
@@ -107,13 +123,13 @@ window.addEventListener('resize', refit);
 view.onLayoutChange(refit);
 
 view.setTranslator(translator, muted);
-view.showScreen(flow.screen, flow.outcome);
+view.showScreen(flow.screen, flow.outcome, campaignView());
 refit();
 
 startGameLoop((dtMs) => {
   const session = flow.session;
   if (session === undefined) {
-    scene.renderBackdrop(frame, LEVELS[0]?.biome ?? 'beach');
+    scene.renderBackdrop(frame, LEVELS[flow.levelIndex]?.biome ?? 'beach');
   } else {
     session.advance(dtMs);
     if (flow.screen !== 'paused') effects.update(dtMs);

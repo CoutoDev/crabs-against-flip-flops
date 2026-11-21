@@ -89,3 +89,33 @@ describe.each(LEVELS.map((level) => [level.id, level] as const))(
     });
   },
 );
+
+describe('balance: the campaign gets harder', () => {
+  // A player who is a little off (12 px) wins the early levels and struggles on the late ones.
+  const sloppy = LEVELS.map((level) => winRate(level, perfectAim(12)));
+
+  it('starts forgiving and ends demanding', () => {
+    expect(sloppy[0]).toBeGreaterThanOrEqual(0.95);
+    expect(sloppy[sloppy.length - 1]).toBeLessThanOrEqual(0.5);
+  });
+
+  it('never gets clearly easier than the level before it', () => {
+    sloppy.forEach((rate, index) => {
+      const before = sloppy[index - 1];
+      if (before !== undefined) expect(rate).toBeLessThanOrEqual(before + 0.1);
+    });
+  });
+
+  it('gets harder from one biome to the next (average win rate)', () => {
+    const mean = (rates: readonly number[]) => rates.reduce((a, b) => a + b, 0) / rates.length;
+    const biomes = ['beach', 'rocks', 'mangrove', 'night'] as const;
+    const means = biomes.map((biome) =>
+      mean(sloppy.filter((_, index) => LEVELS[index]?.biome === biome)),
+    );
+    means.forEach((value, index) => {
+      const before = means[index - 1];
+      if (before !== undefined) expect(value).toBeLessThanOrEqual(before);
+    });
+    expect(means[3]).toBeLessThan(means[0] ?? 0);
+  });
+});

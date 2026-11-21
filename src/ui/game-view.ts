@@ -1,15 +1,28 @@
 import type { RoundOutcome, Screen } from '../application/game-flow';
 import { LOCALES, type Locale } from '../application/locale';
+import type { Biome } from '../domain/entities/level';
+import { canvasLabelKey, levelName } from './campaign-text';
 import type { HudModel } from './hud-model';
 import type { Translator } from './i18n/translator';
 
 export interface ViewActions {
   play(): void;
+  next(): void;
+  selectLevel(index: number): void;
   resume(): void;
   pause(): void;
   toMenu(): void;
   setLocale(locale: Locale): void;
   toggleSound(): void;
+}
+
+/** What the view needs to know about the campaign to draw the level picker and the field label. */
+export interface CampaignView {
+  readonly levelIds: readonly number[];
+  /** Index of the level being played, or chosen on the menu. */
+  readonly selected: number;
+  readonly highestUnlocked: number;
+  readonly biome: Biome;
 }
 
 type OverlayScreen = Exclude<Screen, 'playing'>;
@@ -78,13 +91,16 @@ class SettingsPanel {
   }
 }
 
-/** A modal panel over the canvas: title, optional text, one or two buttons and optional settings. */
+/**
+ * A modal panel over the canvas: title, optional text, a few buttons and optional extras.
+ * The first button that has a label is the primary action (and gets the focus); a button
+ * without a label is hidden, so one overlay can offer different choices at different times.
+ */
 class Overlay {
   readonly root = el('div', 'overlay');
   private readonly heading = el('h2', 'overlay__title');
   private readonly body = el('p', 'overlay__text');
-  private primary: HTMLButtonElement | undefined;
-  private secondary: HTMLButtonElement | undefined;
+  private readonly buttons: HTMLButtonElement[] = [];
 
   constructor(name: string, id: string) {
     this.root.dataset['overlay'] = name;
@@ -96,32 +112,81 @@ class Overlay {
     this.root.append(this.heading, this.body);
   }
 
-  addPrimary(onClick: () => void): void {
-    this.primary = button('control control--primary', onClick);
-    this.root.append(this.primary);
+  addButton(onClick: () => void): void {
+    const b = button('control', onClick);
+    this.buttons.push(b);
+    this.root.append(b);
   }
 
-  addSecondary(onClick: () => void): void {
-    this.secondary = button('control', onClick);
-    this.root.append(this.secondary);
+  /** Extra content (language/sound, level picker) goes after the buttons. */
+  addExtra(node: Node): void {
+    this.root.append(node);
   }
 
-  addSettings(panel: SettingsPanel): void {
-    this.root.append(panel.root);
-  }
-
-  setTexts(title: string, text: string, primary: string, secondary?: string): void {
+  setTexts(title: string, text: string, labels: readonly (string | undefined)[]): void {
     this.heading.textContent = title;
     this.body.textContent = text;
     this.body.hidden = text === '';
-    if (this.primary !== undefined) this.primary.textContent = primary;
-    if (this.secondary !== undefined && secondary !== undefined) {
-      this.secondary.textContent = secondary;
-    }
+    const primary = labels.findIndex((label) => label !== undefined);
+    this.buttons.forEach((b, index) => {
+      const label = labels[index];
+      b.hidden = label === undefined;
+      if (label !== undefined) b.textContent = label;
+      b.classList.toggle('control--primary', index === primary);
+    });
   }
 
   focusPrimary(): void {
-    this.primary?.focus({ preventScroll: true });
+    this.buttons
+      .find((b) => b.classList.contains('control--primary'))
+      ?.focus({ preventScroll: true });
+  }
+}
+
+/** The level picker on the menu: one numbered button per level, locked ones disabled. */
+class LevelPicker {
+  readonly root = el('div', 'levels');
+  private readonly label = el('span', 'levels__label');
+  private readonly group = el('div', 'levels__group');
+  private readonly selectedName = el('p', 'levels__selected');
+  private buttons: HTMLButtonElement[] = [];
+
+  constructor(private readonly onSelect: (index: number) => void) {
+    this.group.setAttribute('role', 'group');
+    this.label.id = 'levels-label';
+    this.group.setAttribute('aria-labelledby', this.label.id);
+    this.selectedName.setAttribute('aria-live', 'polite');
+    this.root.append(this.label, this.group, this.selectedName);
+  }
+
+  update(translator: Translator, campaign: CampaignView): void {
+    const { t } = translator;
+    if (this.buttons.length !== campaign.levelIds.length) {
+      this.buttons = campaign.levelIds.map((_, index) =>
+        button('control control--level', () => this.onSelect(index)),
+      );
+      this.group.replaceChildren(...this.buttons);
+    }
+    this.label.textContent = t('menu.levels');
+    campaign.levelIds.forEach((id, index) => {
+      const b = this.buttons[index];
+      if (b === undefined) return;
+      const locked = index > campaign.highestUnlocked;
+      b.textContent = String(id);
+      b.disabled = locked;
+      b.setAttribute(
+        'aria-label',
+        locked
+          ? t('menu.levelLocked', { level: id })
+          : t('menu.levelOpen', { level: id, name: levelName(translator, id) }),
+      );
+      b.setAttribute('aria-pressed', String(index === campaign.selected));
+    });
+    const selectedId = campaign.levelIds[campaign.selected] ?? 1;
+    this.selectedName.textContent = t('menu.selected', {
+      level: selectedId,
+      name: levelName(translator, selectedId),
+    });
   }
 }
 
@@ -137,6 +202,7 @@ export class GameView {
   private screen: Screen = 'menu';
   private hasShownScreen = false;
   private outcome: RoundOutcome | undefined;
+  private campaign: CampaignView | undefined;
   private lastHud: HudModel | undefined;
   private announceToggle = false;
 
@@ -157,6 +223,7 @@ export class GameView {
   private readonly paused: Overlay;
   private readonly ended: Overlay;
   private readonly settings: readonly SettingsPanel[];
+  private readonly levelPicker: LevelPicker;
 
   constructor(root: HTMLElement, actions: ViewActions) {
     this.pauseButton = button('control control--square', actions.pause);
@@ -179,16 +246,19 @@ export class GameView {
     const pausedSettings = new SettingsPanel('paused', actions);
     this.settings = [menuSettings, pausedSettings];
 
+    this.levelPicker = new LevelPicker(actions.selectLevel);
     this.menu = new Overlay('menu', 'game-menu');
-    this.menu.addPrimary(actions.play);
-    this.menu.addSettings(menuSettings);
+    this.menu.addButton(actions.play);
+    this.menu.addExtra(this.levelPicker.root);
+    this.menu.addExtra(menuSettings.root);
     this.paused = new Overlay('paused', 'game-paused');
-    this.paused.addPrimary(actions.resume);
-    this.paused.addSecondary(actions.toMenu);
-    this.paused.addSettings(pausedSettings);
+    this.paused.addButton(actions.resume);
+    this.paused.addButton(actions.toMenu);
+    this.paused.addExtra(pausedSettings.root);
     this.ended = new Overlay('ended', 'game-ended');
-    this.ended.addPrimary(actions.play);
-    this.ended.addSecondary(actions.toMenu);
+    this.ended.addButton(actions.next);
+    this.ended.addButton(actions.play);
+    this.ended.addButton(actions.toMenu);
 
     this.stage.append(this.canvas, this.menu.root, this.paused.root, this.ended.root);
     this.live.setAttribute('role', 'status');
@@ -221,19 +291,21 @@ export class GameView {
     this.hudScore.label.textContent = t('hud.score');
     this.hudAmmo.label.textContent = t('hud.ammo');
     this.hudCombo.label.textContent = t('hud.combo');
-    this.canvas.setAttribute('aria-label', t('canvas.label'));
     this.help.textContent = t('controls.help');
 
-    this.menu.setTexts(t('game.title'), t('game.tagline'), t('menu.play'));
-    this.paused.setTexts(t('pause.title'), '', t('pause.resume'), t('round.menu'));
+    this.menu.setTexts(t('game.title'), t('game.tagline'), [t('menu.play')]);
+    this.paused.setTexts(t('pause.title'), '', [t('pause.resume'), t('round.menu')]);
+    this.renderCampaign();
     this.renderEnded();
     this.renderScreen();
   }
 
-  showScreen(screen: Screen, outcome: RoundOutcome | undefined): void {
+  showScreen(screen: Screen, outcome: RoundOutcome | undefined, campaign: CampaignView): void {
     const previous = this.screen;
     this.screen = screen;
     this.outcome = outcome;
+    this.campaign = campaign;
+    this.renderCampaign();
     this.renderEnded();
     this.renderScreen();
     if (previous !== screen || !this.hasShownScreen) this.moveFocus();
@@ -296,17 +368,32 @@ export class GameView {
     return { width: viewportWidth - frameX, height: viewportHeight - overhead };
   }
 
+  private renderCampaign(): void {
+    const { translator, campaign } = this;
+    if (translator === undefined || campaign === undefined) return;
+    this.levelPicker.update(translator, campaign);
+    this.canvas.setAttribute('aria-label', translator.t(canvasLabelKey(campaign.biome)));
+  }
+
   private renderEnded(): void {
     const translator = this.translator;
     const outcome = this.outcome;
     if (translator === undefined || outcome === undefined) return;
     const { t } = translator;
     const won = outcome.result === 'won';
+    const title = outcome.campaignComplete
+      ? 'round.campaign.title'
+      : won
+        ? 'round.won.title'
+        : 'round.lost.title';
     this.ended.setTexts(
-      t(won ? 'round.won.title' : 'round.lost.title'),
+      t(title),
       t('round.summary', { score: outcome.score, hits: outcome.hits, throws: outcome.throws }),
-      t(won ? 'round.again' : 'round.retry'),
-      t('round.menu'),
+      [
+        outcome.nextLevelIndex === undefined ? undefined : t('round.next'),
+        t(won ? 'round.again' : 'round.retry'),
+        t('round.menu'),
+      ],
     );
     this.ended.root.dataset['result'] = outcome.result;
   }

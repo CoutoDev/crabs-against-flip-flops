@@ -13,10 +13,28 @@ export const ptBR: Readonly<Record<MessageKey, Message>> = {
   'hud.combo': 'Combo',
   'hud.goal': 'Meta',
   'hud.level': 'Nível {level}',
+  'levels.1.name': 'Praia Calma',
+  'levels.2.name': 'Maré Baixa',
+  'levels.3.name': 'Chegaram os Siris',
+  'levels.4.name': 'Ponta das Pedras',
+  'levels.5.name': 'Poças de Maré',
+  'levels.6.name': 'Morro dos Violinistas',
+  'levels.7.name': 'Beira do Mangue',
+  'levels.8.name': 'Labirinto de Raízes',
+  'levels.9.name': 'Mangue Fechado',
+  'levels.10.name': 'Praia ao Luar',
+  'levels.11.name': 'Correria da Meia-Noite',
+  'levels.12.name': 'A Noite do Rei Caranguejo',
+  'menu.levels': 'Escolha um nível',
+  'menu.levelOpen': 'Nível {level}: {name}',
+  'menu.levelLocked': 'Nível {level}: bloqueado',
+  'menu.selected': 'Nível {level} · {name}',
   'round.won.title': 'Nível concluído!',
   'round.lost.title': 'Acabaram os chinelos!',
   'round.summary': '{score} pontos · {hits} acertos em {throws} arremessos',
+  'round.next': 'Próximo nível',
   'round.again': 'Jogar de novo',
+  'round.campaign.title': 'Campanha concluída!',
   'round.retry': 'Tentar de novo',
   'round.menu': 'Menu principal',
   'pause.title': 'Pausado',
@@ -26,6 +44,13 @@ export const ptBR: Readonly<Record<MessageKey, Message>> = {
   'sound.off': 'Som: desligado',
   'controls.help':
     'Clique ou toque no campo para arremessar. Teclado: setas ou WASD mira (Shift = mais rápido), Espaço ou Enter arremessa, P ou Esc pausa.',
-  'canvas.label': 'Campo do jogo: caranguejos andam de lado pela praia. Arremesse chinelos neles.',
+  'canvas.label.beach':
+    'Campo do jogo: caranguejos andam de lado pela praia. Arremesse chinelos neles.',
+  'canvas.label.rocks':
+    'Campo do jogo: caranguejos correm por uma praia de pedras. Arremesse chinelos neles.',
+  'canvas.label.mangrove':
+    'Campo do jogo: caranguejos correm pela lama do manguezal. Arremesse chinelos neles.',
+  'canvas.label.night':
+    'Campo do jogo: caranguejos correm pela praia à noite. Arremesse chinelos neles.',
   'announce.milestone': 'Marco: {milestone}',
 };

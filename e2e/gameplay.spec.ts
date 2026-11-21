@@ -17,9 +17,11 @@ test('a bot that only looks at the pixels can play a whole round', async ({ game
   await expect(game.primaryButton()).toBeFocused();
   await expect(page.getByRole('button', { name: 'Pause' })).toBeHidden();
 
-  // Retrying starts from scratch.
+  // The main button moves on after a win (next level) and retries after a loss; both start fresh.
+  const won = /Level cleared!/.test(await ended.locator('.overlay__title').innerText());
   await page.keyboard.press('Enter');
   await game.expectScreen('playing');
+  await expect(game.hud('level')).toHaveText(won ? 'Level 2' : 'Level 1');
   expect(await game.ammo()).toBe(16);
   expect(await game.score()).toBe(0);
 });
