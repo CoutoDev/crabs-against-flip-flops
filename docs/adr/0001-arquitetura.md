@@ -40,12 +40,14 @@ Por que D9 sem biblioteca: são 2 idiomas e algumas centenas de strings, sem car
 ```
 src/
   domain/            TS puro, sem DOM, sem Date.now, sem Math.random (lint garante)
-    entities/        Crab, Slipper, Level, Skin, Wallet
-    rules/           trajetória do arremesso, movimento, colisão, pontuação, dificuldade, loja
+    entities/        Crab, Slipper (SlipperFlight), Level, Skin, Wallet
+    rng.ts           interface Rng + mulberry32 (a semente vem do composition root)
+    constants.ts     campo 320×180, origem do arremesso, raio do chinelo, STEP_MS
+    rules/           trajetória, colisão, pontuação, caranguejos, validação de nível, rodada (createRound/throwSlipper/step), loja
     events.ts        eventos de domínio (SlipperThrown, CrabHit, SlipperMissed, ScoreMilestone, LevelCleared, RoundLost, SkinPurchased)
   application/       casos de uso + portas
     use-cases/       StartLevel, ThrowSlipper, TickSimulation, PurchaseSkin, EquipSkin
-    ports/           ProgressRepository, Rng, EventBus
+    ports/           ProgressRepository, EventBus
     locale.ts        Locale, LOCALES, DEFAULT_LOCALE
   infrastructure/    adaptadores
     storage/         LocalStorageProgressRepository (+ validação e migração de schema)
@@ -57,16 +59,19 @@ src/
   data/              levels.ts, skins.ts (dados, não código)
 ```
 
-Dependências apontam para dentro: `infrastructure` e `ui` dependem de `application`, que depende de `domain`. O domínio não importa nada de fora. As regras de lint do repositório proíbem DOM, `localStorage`, `Math.random` e `Date.now` em `domain/` e `application/`, e proíbem importar de `infrastructure/` e `ui/`.
+Dependências apontam para dentro: `infrastructure` e `ui` dependem de `application`, que depende de `domain`. O domínio não importa nada de fora. As regras de lint do repositório proíbem DOM, `localStorage`, `Math.random` e `Date.now` em `domain/` e `application/`, e proíbem importar de `infrastructure/`, `ui/` e `data/`. O `Rng` é interface do próprio domínio (ele precisa dele para sortear spawns e dependências só apontam para dentro); o composition root apenas injeta a semente.
 
 ## 4. Mecânicas e regras (rascunho)
 
-- **Arremesso:** origem fixa na base da tela. Ao receber o ponto alvo, calcula-se o tempo de voo (proporcional à distância, com limites mínimo e máximo por nível). A posição base é interpolada linearmente e um deslocamento parabólico é somado em Y para o arco visual. O estado do chinelo é função pura do tempo decorrido, o que facilita testes.
+- **Arremesso:** origem fixa na base da tela. Ao receber o ponto alvo (limitado ao campo), calcula-se o tempo de voo: distância ÷ `speedPxPerSec`, limitado a [`minFlightMs`, `maxFlightMs`] por nível. A posição é interpolada linearmente e um deslocamento parabólico de `arcHeightPx` é somado em Y para o arco visual (não afeta o acerto). O estado do chinelo é função pura do tempo decorrido, o que facilita testes.
+- **Acerto (D11):** só vale no ponto de pouso. Um chinelo acerta no máximo um caranguejo: o mais próximo cujo alcance (`hitRadiusPx` do tipo + raio do chinelo) cobre o ponto; empate vai para o menor id.
 - **Caranguejos:** movimento lateral (o caranguejo anda de lado, parte do humor e do design), com velocidade, tamanho e trajetória por tipo e por nível. Tipos previstos: caranguejo comum, siri (mais rápido), caranguejo-violinista (hit box menor, mais pontos), e variações por bioma.
-- **Munição:** `N` chinelos por nível. Cada arremesso consome 1. Sem munição e sem chinelos em voo, avalia-se vitória ou derrota.
-- **Pontuação:** pontos por tipo de caranguejo, com bônus de sequência de acertos (combo). O combo zera ao errar.
+- **Munição e fim de rodada (D8):** `N` chinelos por nível. Cada arremesso consome 1. A rodada é vencida no instante em que o placar alcança a meta; é perdida quando a munição acaba, não há chinelo em voo e a meta não foi atingida. Caranguejos que atravessam a tela somem sem penalidade. Rodada encerrada ignora novos arremessos (`ThrowRejected`).
+- **Spawn:** um caranguejo nasce fora da tela a cada intervalo sorteado (`spawn.intervalMs`), no máximo `maxOnScreen` ao mesmo tempo; se a tela estiver cheia a tentativa é descartada (não fica em fila). Ordem dos sorteios: tipo, velocidade, direção, faixa vertical.
+- **Pontuação:** pontos por tipo de caranguejo vezes o multiplicador de combo: +1 a cada `comboStep` acertos seguidos, até `maxMultiplier` (com 3/4: acertos 1–3 ×1, 4–6 ×2, 7–9 ×3, 10+ ×4). O combo zera ao errar. Um `ScoreMilestone` é emitido para cada múltiplo de `milestoneEvery` cruzado.
+- **Validação:** `createRound` recusa níveis inválidos, incluindo meta inalcançável (melhor caso: todos os arremessos acertando o tipo mais valioso em sequência).
 - **Dificuldade por nível (tudo em dados):** velocidade, densidade de spawn, tamanho do alvo, munição, meta de pontos, mix de tipos, tempo de voo mínimo.
-- **Aleatoriedade:** sempre via porta `Rng` com semente (ex.: mulberry32). Em produção, semente aleatória; nos testes, fixa.
+- **Aleatoriedade:** `Rng` (mulberry32) vive no domínio e o estado dele fica dentro do `RoundState`. Assim `step(state, dt)` é função pura: mesma semente e mesmos arremessos geram a mesma rodada (replays e testes determinísticos). Em produção o composition root escolhe a semente.
 
 Esboço do contrato de um nível:
 
@@ -76,10 +81,12 @@ interface LevelConfig {
   biome: 'beach' | 'rocks' | 'mangrove' | 'night';
   ammo: number;
   targetScore: number;
-  spawn: { intervalMs: [min: number, max: number]; maxOnScreen: number };
-  crabs: { type: CrabType; weight: number; speedPxPerSec: [number, number] }[];
-  throw: { minFlightMs: number; maxFlightMs: number };
+  spawn: { intervalMs: Range; maxOnScreen: number; laneY: Range };
+  crabs: { type: CrabType; weight: number; speedPxPerSec: Range }[];
+  throw: { speedPxPerSec: number; minFlightMs: number; maxFlightMs: number; arcHeightPx: number };
+  scoring: { comboStep: number; maxMultiplier: number; milestoneEvery: number };
 }
+// Range = { min: number; max: number }
 ```
 
 ## 5. Persistência (schema v1)
@@ -128,7 +135,7 @@ interface SaveDataV1 {
 ## 8. Plano de marcos
 
 - **M0 — Scaffold:** Vite + TS estrito + Vitest + ESLint/Prettier, estrutura de pastas, CI, base de i18n. ✔ feito
-- **M1 — Núcleo de domínio (TDD):** trajetória, caranguejos, colisão, pontuação, fim de rodada.
+- **M1 — Núcleo de domínio (TDD):** trajetória, caranguejos, colisão, pontuação, fim de rodada. ✔ feito (valores iniciais de balanceamento em `src/data/`, a ajustar no playtest do M2)
 - **M2 — Esqueleto andante:** CanvasRenderer + input + SFX básicos; um nível jogável de ponta a ponta.
 - **M3 — Campanha:** níveis em dados, biomas, dificuldade crescente, progressão.
 - **M4 — Loja e persistência:** repositório em `localStorage`, saldo, skins, equipar, locale persistido.

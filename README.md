@@ -4,7 +4,7 @@
 
 **PT-BR** — Minigame 8 bits de navegador: arremesse chinelos em caranguejos e siris que cruzam praias e manguezais, ganhe pontos, avance por níveis mais difíceis e gaste os pontos em skins de chinelo. Disponível em português (Brasil) e inglês. O progresso é salvo localmente no navegador (sem conta).
 
-> Status: **M0 (scaffold)** — the game is not playable yet. / o jogo ainda não é jogável.
+> Status: **M1 (domain core)** — rules and simulation are implemented and tested, but there is no rendering yet: the game is not playable. / as regras e a simulação estão implementadas e testadas, mas ainda não há tela: o jogo ainda não é jogável.
 
 ## Development / Desenvolvimento
 
