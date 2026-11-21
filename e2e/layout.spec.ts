@@ -6,8 +6,9 @@ test.describe('layout', () => {
     game,
     page,
   }) => {
-    for (const screen of ['menu', 'playing'] as const) {
-      if (screen === 'playing') await game.play();
+    for (const screen of ['menu', 'briefing', 'playing'] as const) {
+      if (screen === 'briefing') await game.openBriefing();
+      if (screen === 'playing') await game.primaryButton().click();
       const box = await game.stage.boundingBox();
       const field = await game.fieldSize();
       const viewport = page.viewportSize();

@@ -1,12 +1,15 @@
 import type { RoundOutcome, Screen } from '../application/game-flow';
 import { LOCALES, type Locale } from '../application/locale';
+import type { CrabType } from '../domain/entities/crab';
 import type { Biome } from '../domain/entities/level';
-import { canvasLabelKey, levelName } from './campaign-text';
+import { canvasLabelKey, crabNameKey, levelName } from './campaign-text';
 import type { HudModel } from './hud-model';
 import type { Translator } from './i18n/translator';
 
 export interface ViewActions {
   play(): void;
+  start(): void;
+  retry(): void;
   next(): void;
   selectLevel(index: number): void;
   resume(): void;
@@ -23,7 +26,12 @@ export interface CampaignView {
   readonly selected: number;
   readonly highestUnlocked: number;
   readonly biome: Biome;
+  /** The crab types of the selected level, for the briefing. */
+  readonly crabs: readonly { readonly type: CrabType; readonly points: number }[];
 }
+
+/** One small picture per crab type, drawn by the infrastructure layer. */
+export type CrabIcons = Readonly<Record<CrabType, () => HTMLElement>>;
 
 type OverlayScreen = Exclude<Screen, 'playing'>;
 
@@ -190,6 +198,28 @@ class LevelPicker {
   }
 }
 
+/** The briefing's list of targets: a picture, a name and the points each one is worth. */
+class TargetList {
+  readonly root = el('ul', 'targets');
+
+  constructor(private readonly icons: CrabIcons) {}
+
+  update(translator: Translator, crabs: CampaignView['crabs']): void {
+    const { t } = translator;
+    this.root.replaceChildren(
+      ...crabs.map(({ type, points }) => {
+        const icon = el('span', 'targets__icon', this.icons[type]());
+        icon.setAttribute('aria-hidden', 'true');
+        const name = el('span', 'targets__name', t(crabNameKey(type)));
+        const worth = el('span', 'targets__points', t('score.points', { count: points }));
+        const item = el('li', 'targets__item', icon, el('span', 'targets__text', name, worth));
+        item.dataset['crab'] = type;
+        return item;
+      }),
+    );
+  }
+}
+
 /**
  * Everything the player sees around the canvas: a compact HUD (the only fixed chrome, so the
  * portrait field gets the height), the dialogs (menu, pause, end), help text and the live region
@@ -211,6 +241,7 @@ export class GameView {
   private readonly pauseButton: HTMLButtonElement;
   private readonly hud = el('div', 'hud');
   private readonly hudLevel = hudItem('level');
+  private readonly hudName = el('p', 'hud__name');
   private readonly hudScore = hudItem('score');
   private readonly hudAmmo = hudItem('ammo');
   private readonly hudCombo = hudItem('combo');
@@ -220,18 +251,21 @@ export class GameView {
   private readonly live = el('p', 'sr-only');
 
   private readonly menu: Overlay;
+  private readonly briefing: Overlay;
+  private readonly targets: TargetList;
   private readonly paused: Overlay;
   private readonly ended: Overlay;
   private readonly settings: readonly SettingsPanel[];
   private readonly levelPicker: LevelPicker;
 
-  constructor(root: HTMLElement, actions: ViewActions) {
+  constructor(root: HTMLElement, actions: ViewActions, icons: CrabIcons) {
     this.pauseButton = button('control control--square', actions.pause);
     this.pauseButton.textContent = 'II';
 
     this.progress.max = 1;
     this.hud.append(
       this.hudLevel.root,
+      this.hudName,
       this.hudScore.root,
       this.hudAmmo.root,
       this.hudCombo.root,
@@ -251,16 +285,27 @@ export class GameView {
     this.menu.addButton(actions.play);
     this.menu.addExtra(this.levelPicker.root);
     this.menu.addExtra(menuSettings.root);
+    this.targets = new TargetList(icons);
+    this.briefing = new Overlay('briefing', 'game-briefing');
+    this.briefing.addExtra(this.targets.root);
+    this.briefing.addButton(actions.start);
+    this.briefing.addButton(actions.toMenu);
     this.paused = new Overlay('paused', 'game-paused');
     this.paused.addButton(actions.resume);
     this.paused.addButton(actions.toMenu);
     this.paused.addExtra(pausedSettings.root);
     this.ended = new Overlay('ended', 'game-ended');
     this.ended.addButton(actions.next);
-    this.ended.addButton(actions.play);
+    this.ended.addButton(actions.retry);
     this.ended.addButton(actions.toMenu);
 
-    this.stage.append(this.canvas, this.menu.root, this.paused.root, this.ended.root);
+    this.stage.append(
+      this.canvas,
+      this.menu.root,
+      this.briefing.root,
+      this.paused.root,
+      this.ended.root,
+    );
     this.live.setAttribute('role', 'status');
     this.live.setAttribute('aria-live', 'polite');
     this.game.append(this.title, this.hud, this.stage, this.help, this.live);
@@ -316,6 +361,7 @@ export class GameView {
   updateHud(model: HudModel): void {
     const last = this.lastHud;
     if (last?.level !== model.level) this.hudLevel.value.textContent = model.level;
+    if (last?.levelName !== model.levelName) this.hudName.textContent = model.levelName;
     if (last?.score !== model.score || last.goal !== model.goal) {
       this.hudScore.value.textContent = `${model.score} / ${model.goal}`;
     }
@@ -371,7 +417,15 @@ export class GameView {
   private renderCampaign(): void {
     const { translator, campaign } = this;
     if (translator === undefined || campaign === undefined) return;
+    const { t } = translator;
     this.levelPicker.update(translator, campaign);
+    this.targets.update(translator, campaign.crabs);
+    const levelId = campaign.levelIds[campaign.selected] ?? 1;
+    this.briefing.setTexts(
+      t('menu.selected', { level: levelId, name: levelName(translator, levelId) }),
+      t('briefing.targets'),
+      [t('briefing.start'), t('round.menu')],
+    );
     this.canvas.setAttribute('aria-label', translator.t(canvasLabelKey(campaign.biome)));
   }
 
@@ -401,6 +455,7 @@ export class GameView {
   private renderScreen(): void {
     const overlays: Readonly<Record<OverlayScreen, Overlay>> = {
       menu: this.menu,
+      briefing: this.briefing,
       paused: this.paused,
       ended: this.ended,
     };
@@ -423,6 +478,9 @@ export class GameView {
         break;
       case 'menu':
         this.menu.focusPrimary();
+        break;
+      case 'briefing':
+        this.briefing.focusPrimary();
         break;
       case 'paused':
         this.paused.focusPrimary();

@@ -5,7 +5,8 @@ import type { DomainEvent } from '../domain/events';
 import { createRound, type RoundState } from '../domain/rules/round';
 import { makeLevel, TEST_CRAB_SPECS } from '../domain/test-support';
 import { announcementFor } from './announce';
-import { canvasLabelKey, levelName } from './campaign-text';
+import { CRAB_TYPE_IDS } from '../domain/entities/crab';
+import { canvasLabelKey, crabNameKey, levelName } from './campaign-text';
 import { buildHud, LOW_AMMO_THRESHOLD } from './hud-model';
 import { createTranslator } from './i18n/translator';
 
@@ -25,6 +26,11 @@ describe('buildHud', () => {
     expect(hud.score).toBe('1.500');
     expect(hud.level).toBe('Nível 3');
     expect(buildHud(state({ score: 1500 }), 3, en).score).toBe('1,500');
+  });
+
+  it('shows the name of the level under its number', () => {
+    expect(buildHud(state(), 1, en).levelName).toBe('Sandy Shore');
+    expect(buildHud(state(), 1, createTranslator('pt-BR')).levelName).toBe('Praia Calma');
   });
 
   it('shows ammo and goal', () => {
@@ -99,6 +105,12 @@ describe('announcementFor', () => {
 });
 
 describe('campaign text', () => {
+  it.each(LOCALES)('%s has a name for every crab type', (locale) => {
+    const translator = createTranslator(locale);
+    const names = CRAB_TYPE_IDS.map((type) => translator.t(crabNameKey(type)));
+    expect(new Set(names).size).toBe(CRAB_TYPE_IDS.length);
+  });
+
   it.each(LOCALES)('%s names every level of the campaign', (locale) => {
     const translator = createTranslator(locale);
     for (const level of LEVELS) {

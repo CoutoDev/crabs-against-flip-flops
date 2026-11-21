@@ -105,6 +105,11 @@ body {
   max-width: 30rem;
 }
 
+.hud__item,
+.hud > .control {
+  grid-row: 1;
+}
+
 .hud__item {
   display: flex;
   flex-direction: column;
@@ -135,7 +140,22 @@ body {
   color: var(--coral);
 }
 
+.hud__name {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  min-height: 1.1rem;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.75rem;
+  line-height: 1.1rem;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sun);
+}
+
 .hud__progress {
+  grid-row: 3;
   grid-column: 1 / -1;
   width: 100%;
   height: 0.6rem;
@@ -191,7 +211,8 @@ body {
   flex-direction: column;
   gap: 0.6rem;
   align-items: center;
-  justify-content: center;
+  /* `safe`: when the content is taller than the field it starts at the top and scrolls, instead of being cut at both ends. */
+  justify-content: safe center;
   padding: 0.75rem;
   overflow: auto;
   text-align: center;
@@ -214,6 +235,56 @@ body {
   margin: 0;
   max-width: 18rem;
   font-size: 0.9rem;
+}
+
+/* Briefing: who you are about to face. */
+.targets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.targets__item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+}
+
+.targets__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.5rem;
+  height: 3.2rem;
+  background: color-mix(in srgb, var(--sand) 18%, transparent);
+  border: 2px solid var(--sand);
+}
+
+.targets__icon canvas {
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.targets__text {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.targets__name {
+  font-weight: bold;
+  color: var(--white);
+}
+
+.targets__points {
+  font-size: 0.75rem;
+  opacity: 0.85;
 }
 
 /* Level picker on the menu: numbered squares, locked ones dimmed. */
@@ -311,6 +382,25 @@ body {
 
   .hud__label {
     font-size: 0.75rem;
+  }
+
+  .hud__name {
+    min-height: 0;
+    white-space: normal;
+  }
+
+  /* The field is only 180 px wide here: Start first, the list of targets after it. */
+  .overlay[data-overlay='briefing'] .targets {
+    order: 1;
+  }
+
+  .targets__icon {
+    width: 3.6rem;
+    height: 2.6rem;
+  }
+
+  .targets__item {
+    gap: 0.5rem;
   }
 
   .help {

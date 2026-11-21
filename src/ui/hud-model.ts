@@ -1,9 +1,12 @@
 import { comboMultiplier } from '../domain/rules/scoring';
 import type { RoundState } from '../domain/rules/round';
+import { levelName } from './campaign-text';
 import type { Translator } from './i18n/translator';
 
 export interface HudModel {
   readonly level: string;
+  /** The level's name, shown under the level number. */
+  readonly levelName: string;
   readonly score: string;
   readonly goal: string;
   readonly ammo: string;
@@ -22,6 +25,7 @@ export function buildHud(state: RoundState, levelNumber: number, translator: Tra
   const nextMultiplier = comboMultiplier(state.combo + 1, level.scoring);
   return {
     level: translator.t('hud.level', { level: levelNumber }),
+    levelName: levelName(translator, level.id),
     score: translator.formatNumber(state.score),
     goal: translator.formatNumber(level.targetScore),
     ammo: translator.formatNumber(state.ammo),

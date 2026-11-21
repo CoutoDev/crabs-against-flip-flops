@@ -1,3 +1,4 @@
+import type { CrabType } from '../domain/entities/crab';
 import type { Biome } from '../domain/entities/level';
 import type { MessageKey } from './i18n/messages/en';
 import type { Translator } from './i18n/translator';
@@ -12,3 +13,5 @@ export const levelName = (translator: Translator, levelId: number): string =>
   translator.t(levelNameKey(levelId));
 
 export const canvasLabelKey = (biome: Biome): MessageKey => `canvas.label.${biome}`;
+
+export const crabNameKey = (type: CrabType): MessageKey => `crab.${type}`;

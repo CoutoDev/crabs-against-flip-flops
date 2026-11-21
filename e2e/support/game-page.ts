@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-export type ScreenName = 'menu' | 'playing' | 'paused' | 'ended';
+export type ScreenName = 'menu' | 'briefing' | 'playing' | 'paused' | 'ended';
 
 interface Point {
   readonly x: number;
@@ -28,7 +28,7 @@ export class GamePage {
 
   constructor(readonly page: Page) {
     this.stage = page.locator('.stage');
-    this.canvas = page.locator('canvas');
+    this.canvas = page.locator('canvas.stage__canvas');
     this.live = page.locator('[role="status"]');
   }
 
@@ -72,7 +72,15 @@ export class GamePage {
     return this.page.locator('.overlay:not([hidden]) .control--primary');
   }
 
+  /** From the menu: opens the briefing of the selected level. */
+  async openBriefing(): Promise<void> {
+    await this.primaryButton().click();
+    await this.expectScreen('briefing');
+  }
+
+  /** From the menu: reads past the briefing and starts the round. */
   async play(): Promise<void> {
+    await this.openBriefing();
     await this.primaryButton().click();
     await this.expectScreen('playing');
   }
