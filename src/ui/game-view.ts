@@ -3,8 +3,10 @@ import { LOCALES, type Locale } from '../application/locale';
 import type { CrabType } from '../domain/entities/crab';
 import type { Biome } from '../domain/entities/level';
 import { canvasLabelKey, crabNameKey, levelName } from './campaign-text';
+import { button, el } from './dom';
 import type { HudModel } from './hud-model';
 import type { Translator } from './i18n/translator';
+import { NameField, ShopList, skinName, type ShopModel } from './shop-view';
 
 export interface ViewActions {
   play(): void;
@@ -17,6 +19,14 @@ export interface ViewActions {
   toMenu(): void;
   setLocale(locale: Locale): void;
   toggleSound(): void;
+  openShop(): void;
+  closeShop(): void;
+  buySkin(skinId: string): void;
+  equipSkin(skinId: string): void;
+  /** Called while typing, to keep the name saved. */
+  typePlayerName(name: string): void;
+  /** Called when the player leaves the field; returns the cleaned name that was kept. */
+  commitPlayerName(name: string): string;
 }
 
 /** What the view needs to know about the campaign to draw the level picker and the field label. */
@@ -30,28 +40,13 @@ export interface CampaignView {
   readonly crabs: readonly { readonly type: CrabType; readonly points: number }[];
 }
 
-/** One small picture per crab type, drawn by the infrastructure layer. */
-export type CrabIcons = Readonly<Record<CrabType, () => HTMLElement>>;
+/** Small pictures drawn by the infrastructure layer: one per crab type, one per skin. */
+export interface ViewIcons {
+  crab(type: CrabType): HTMLElement;
+  skin(skinId: string): HTMLElement;
+}
 
 type OverlayScreen = Exclude<Screen, 'playing'>;
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-  ...children: (Node | string)[]
-): HTMLElementTagNameMap[K] {
-  const element = document.createElement(tag);
-  if (className !== undefined) element.className = className;
-  element.append(...children);
-  return element;
-}
-
-function button(className: string, onClick: () => void): HTMLButtonElement {
-  const b = el('button', className);
-  b.type = 'button';
-  b.addEventListener('click', onClick);
-  return b;
-}
 
 interface HudItem {
   readonly root: HTMLElement;
@@ -202,13 +197,13 @@ class LevelPicker {
 class TargetList {
   readonly root = el('ul', 'targets');
 
-  constructor(private readonly icons: CrabIcons) {}
+  constructor(private readonly icons: ViewIcons) {}
 
   update(translator: Translator, crabs: CampaignView['crabs']): void {
     const { t } = translator;
     this.root.replaceChildren(
       ...crabs.map(({ type, points }) => {
-        const icon = el('span', 'targets__icon', this.icons[type]());
+        const icon = el('span', 'targets__icon', this.icons.crab(type));
         icon.setAttribute('aria-hidden', 'true');
         const name = el('span', 'targets__name', t(crabNameKey(type)));
         const worth = el('span', 'targets__points', t('score.points', { count: points }));
@@ -250,7 +245,12 @@ export class GameView {
   private readonly help = el('p', 'help');
   private readonly live = el('p', 'sr-only');
 
+  private shopModel: ShopModel | undefined;
+  private playerName = '';
   private readonly menu: Overlay;
+  private readonly shop: Overlay;
+  private readonly shopList: ShopList;
+  private readonly nameField: NameField;
   private readonly briefing: Overlay;
   private readonly targets: TargetList;
   private readonly paused: Overlay;
@@ -258,7 +258,7 @@ export class GameView {
   private readonly settings: readonly SettingsPanel[];
   private readonly levelPicker: LevelPicker;
 
-  constructor(root: HTMLElement, actions: ViewActions, icons: CrabIcons) {
+  constructor(root: HTMLElement, actions: ViewActions, icons: ViewIcons) {
     this.pauseButton = button('control control--square', actions.pause);
     this.pauseButton.textContent = 'II';
 
@@ -282,9 +282,19 @@ export class GameView {
 
     this.levelPicker = new LevelPicker(actions.selectLevel);
     this.menu = new Overlay('menu', 'game-menu');
+    this.nameField = new NameField(actions.typePlayerName, actions.commitPlayerName);
     this.menu.addButton(actions.play);
+    this.menu.addButton(actions.openShop);
     this.menu.addExtra(this.levelPicker.root);
+    this.menu.addExtra(this.nameField.root);
     this.menu.addExtra(menuSettings.root);
+    this.shopList = new ShopList((id) => icons.skin(id), {
+      buy: actions.buySkin,
+      equip: actions.equipSkin,
+    });
+    this.shop = new Overlay('shop', 'game-shop');
+    this.shop.addButton(actions.closeShop);
+    this.shop.addExtra(this.shopList.root);
     this.targets = new TargetList(icons);
     this.briefing = new Overlay('briefing', 'game-briefing');
     this.briefing.addExtra(this.targets.root);
@@ -302,6 +312,7 @@ export class GameView {
     this.stage.append(
       this.canvas,
       this.menu.root,
+      this.shop.root,
       this.briefing.root,
       this.paused.root,
       this.ended.root,
@@ -338,7 +349,9 @@ export class GameView {
     this.hudCombo.label.textContent = t('hud.combo');
     this.help.textContent = t('controls.help');
 
-    this.menu.setTexts(t('game.title'), t('game.tagline'), [t('menu.play')]);
+    this.menu.setTexts(t('game.title'), t('game.tagline'), [t('menu.play'), t('menu.shop')]);
+    this.nameField.update(translator, this.playerName);
+    this.renderShop();
     this.paused.setTexts(t('pause.title'), '', [t('pause.resume'), t('round.menu')]);
     this.renderCampaign();
     this.renderEnded();
@@ -414,6 +427,31 @@ export class GameView {
     return { width: viewportWidth - frameX, height: viewportHeight - overhead };
   }
 
+  /** The shop's contents and the name field follow the player's save. */
+  updateProfile(shop: ShopModel, playerName: string): void {
+    this.shopModel = shop;
+    this.playerName = playerName;
+    if (this.translator !== undefined) this.nameField.update(this.translator, playerName);
+    this.renderShop();
+  }
+
+  /** The name of a skin in the current language, for announcements. */
+  skinLabel(skinId: string): string {
+    return this.translator === undefined ? skinId : skinName(this.translator, skinId);
+  }
+
+  private renderShop(): void {
+    const { translator, shopModel } = this;
+    if (translator === undefined || shopModel === undefined) return;
+    const { t } = translator;
+    this.shopList.update(translator, shopModel);
+    this.shop.setTexts(
+      t('shop.title'),
+      t('shop.balance', { points: t('score.points', { count: shopModel.balance }) }),
+      [t('shop.back')],
+    );
+  }
+
   private renderCampaign(): void {
     const { translator, campaign } = this;
     if (translator === undefined || campaign === undefined) return;
@@ -455,6 +493,7 @@ export class GameView {
   private renderScreen(): void {
     const overlays: Readonly<Record<OverlayScreen, Overlay>> = {
       menu: this.menu,
+      shop: this.shop,
       briefing: this.briefing,
       paused: this.paused,
       ended: this.ended,
@@ -465,7 +504,7 @@ export class GameView {
     const inRound = this.screen === 'playing' || this.screen === 'paused';
     // `visibility`, not `hidden`: the HUD keeps its space, so the canvas scale never jumps between
     // screens; it also removes the HUD from the accessibility tree while it is invisible.
-    this.hud.style.visibility = this.screen === 'menu' ? 'hidden' : '';
+    this.hud.style.visibility = this.screen === 'menu' || this.screen === 'shop' ? 'hidden' : '';
     this.pauseButton.style.visibility = inRound ? '' : 'hidden';
     this.pauseButton.disabled = this.screen !== 'playing';
     this.stage.dataset['screen'] = this.screen;
@@ -478,6 +517,9 @@ export class GameView {
         break;
       case 'menu':
         this.menu.focusPrimary();
+        break;
+      case 'shop':
+        this.shop.focusPrimary();
         break;
       case 'briefing':
         this.briefing.focusPrimary();

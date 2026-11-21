@@ -4,7 +4,7 @@ import type { DomainEvent } from '../domain/events';
 import type { EventBus } from './event-bus';
 import { GameSession } from './game-session';
 
-export type Screen = 'menu' | 'briefing' | 'playing' | 'paused' | 'ended';
+export type Screen = 'menu' | 'shop' | 'briefing' | 'playing' | 'paused' | 'ended';
 
 export interface RoundOutcome {
   readonly result: 'won' | 'lost';
@@ -49,6 +49,7 @@ export class GameFlow {
   private frontierIndex = 0;
   private bestScores: Readonly<Record<number, number>> = {};
   private listeners: readonly (() => void)[] = [];
+  private roundEndListeners: readonly ((outcome: RoundOutcome) => void)[] = [];
 
   constructor(private readonly deps: GameFlowDeps) {
     if (deps.levels.length === 0) throw new RangeError('GameFlow needs at least one level');
@@ -100,6 +101,28 @@ export class GameFlow {
     return () => {
       this.listeners = this.listeners.filter((candidate) => candidate !== listener);
     };
+  }
+
+  /**
+   * Called once when a round ends (won or lost), after the campaign progress was updated, so
+   * `progress` already includes the result. Returns the unsubscribe function.
+   */
+  onRoundEnd(listener: (outcome: RoundOutcome) => void): () => void {
+    this.roundEndListeners = [...this.roundEndListeners, listener];
+    return () => {
+      this.roundEndListeners = this.roundEndListeners.filter((candidate) => candidate !== listener);
+    };
+  }
+
+  /** The shop is reached from the menu and goes back to it. */
+  openShop(): void {
+    if (this.current !== 'menu') return;
+    this.go('shop');
+  }
+
+  closeShop(): void {
+    if (this.current !== 'shop') return;
+    this.go('menu');
   }
 
   /** Chooses which level "Play" starts. Only on the menu, and only among unlocked levels. */
@@ -205,6 +228,8 @@ export class GameFlow {
       nextLevelIndex: result === 'won' && hasNext ? this.currentLevelIndex + 1 : undefined,
       campaignComplete: result === 'won' && !hasNext,
     };
+    const outcome = this.currentOutcome;
+    for (const listener of this.roundEndListeners) listener(outcome);
     this.go('ended');
   }
 

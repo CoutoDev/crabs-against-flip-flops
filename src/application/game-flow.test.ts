@@ -388,4 +388,44 @@ describe('GameFlow', () => {
       expect(flow.levelIndex).toBe(1);
     });
   });
+
+  describe('round end listeners and the shop', () => {
+    it('tells the round end listeners once, with the outcome, before the end screen', () => {
+      const { flow, bus } = setup();
+      const seen: string[] = [];
+      flow.onRoundEnd((outcome) =>
+        seen.push(`${outcome.result}:${flow.screen}:${flow.progress.highestUnlockedLevel}`),
+      );
+      begin(flow);
+      bus.publish({ type: 'LevelCleared', score: 100, ammoLeft: 3 });
+      // The screen is still "playing" when listeners run, and progress already has the unlock.
+      expect(seen).toEqual(['won:playing:2']);
+    });
+
+    it('stops telling a listener after it unsubscribes', () => {
+      const { flow, bus } = setup();
+      const listener = vi.fn();
+      flow.onRoundEnd(listener)();
+      begin(flow);
+      bus.publish({ type: 'RoundLost', score: 0 });
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('opens the shop from the menu and closes it back to the menu', () => {
+      const { flow } = setup();
+      flow.openShop();
+      expect(flow.screen).toBe('shop');
+      flow.closeShop();
+      expect(flow.screen).toBe('menu');
+    });
+
+    it('opens the shop only from the menu', () => {
+      const { flow } = setup();
+      begin(flow);
+      flow.openShop();
+      expect(flow.screen).toBe('playing');
+      flow.closeShop();
+      expect(flow.screen).toBe('playing');
+    });
+  });
 });

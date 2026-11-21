@@ -287,6 +287,100 @@ body {
   opacity: 0.85;
 }
 
+/* Shop: one row per skin. */
+.skins {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 17rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skins__item {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+  text-align: left;
+}
+
+.skins__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.6rem;
+  background: color-mix(in srgb, var(--sand) 18%, transparent);
+  border: 2px solid var(--sand);
+}
+
+.skins__icon canvas {
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.skins__text {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.skins__name {
+  font-weight: bold;
+  color: var(--white);
+}
+
+.skins__price {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.skins__action {
+  min-width: 5.2rem;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+.skins__action[data-state='equipped'] {
+  opacity: 1;
+  color: var(--sun);
+  border-color: var(--sun);
+}
+
+/* Name field on the menu. */
+.name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: center;
+}
+
+.name-field__label {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.name-field__input {
+  width: 12rem;
+  min-height: 44px;
+  padding: 0.3rem 0.6rem;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--white);
+  text-align: center;
+  background: color-mix(in srgb, var(--ink) 70%, transparent);
+  border: 2px solid var(--sand);
+}
+
+.name-field__input::placeholder {
+  color: var(--sand);
+  opacity: 0.55;
+}
+
 /* Level picker on the menu: numbered squares, locked ones dimmed. */
 .levels {
   display: flex;
