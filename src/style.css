@@ -216,6 +216,38 @@ body {
   font-size: 0.9rem;
 }
 
+/* Level picker on the menu: numbered squares, locked ones dimmed. */
+.levels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+.levels__label {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.levels__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: center;
+  max-width: 16rem;
+}
+
+.control--level {
+  padding: 0;
+  font-weight: bold;
+}
+
+.levels__selected {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--sun);
+}
+
 .settings {
   display: flex;
   flex-direction: column;

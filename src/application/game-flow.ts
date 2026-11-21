@@ -12,6 +12,19 @@ export interface RoundOutcome {
   readonly score: number;
   readonly hits: number;
   readonly throws: number;
+  /** Where "Next level" goes: set only after a win that is not on the last level. */
+  readonly nextLevelIndex: number | undefined;
+  /** True when the last level of the campaign was just won. */
+  readonly campaignComplete: boolean;
+}
+
+/**
+ * What the campaign remembers between rounds. It has the shape of the persisted save (ADR section 5),
+ * keyed by level id, so the progress repository (M4) can store and restore it as is.
+ */
+export interface CampaignProgress {
+  readonly highestUnlockedLevel: number;
+  readonly bestScoreByLevel: Readonly<Record<number, number>>;
 }
 
 export interface GameFlowDeps {
@@ -20,6 +33,8 @@ export interface GameFlowDeps {
   /** Impure on purpose: the composition root provides randomness, the application layer stays pure. */
   readonly newSeed: () => number;
   readonly bus: EventBus<DomainEvent>;
+  /** Restored progress; a new player starts with only the first level unlocked. */
+  readonly progress?: CampaignProgress | undefined;
 }
 
 /**
@@ -31,10 +46,21 @@ export class GameFlow {
   private currentSession: GameSession | undefined;
   private currentOutcome: RoundOutcome | undefined;
   private currentLevelIndex = 0;
+  private frontierIndex = 0;
+  private bestScores: Readonly<Record<number, number>> = {};
   private listeners: readonly (() => void)[] = [];
 
   constructor(private readonly deps: GameFlowDeps) {
     if (deps.levels.length === 0) throw new RangeError('GameFlow needs at least one level');
+    const saved = deps.progress;
+    if (saved !== undefined) {
+      const lastIndex = deps.levels.length - 1;
+      // Furthest level whose id the save has reached; ids outside the campaign are clamped.
+      const reached = deps.levels.filter((level) => level.id <= saved.highestUnlockedLevel).length;
+      this.frontierIndex = Math.min(Math.max(reached - 1, 0), lastIndex);
+      this.bestScores = { ...saved.bestScoreByLevel };
+      this.currentLevelIndex = this.frontierIndex; // "Play" continues where the player stopped
+    }
     deps.bus.subscribe((event) => this.onEvent(event));
   }
 
@@ -51,8 +77,21 @@ export class GameFlow {
     return this.currentOutcome;
   }
 
+  /** The level being played or, on the menu, the one that "Play" will start. */
   get levelIndex(): number {
     return this.currentLevelIndex;
+  }
+
+  /** Index of the furthest level the player may play. */
+  get highestUnlockedIndex(): number {
+    return this.frontierIndex;
+  }
+
+  get progress(): CampaignProgress {
+    return {
+      highestUnlockedLevel: this.deps.levels[this.frontierIndex]?.id ?? 1,
+      bestScoreByLevel: this.bestScores,
+    };
   }
 
   /** Returns the unsubscribe function. */
@@ -63,10 +102,19 @@ export class GameFlow {
     };
   }
 
+  /** Chooses which level "Play" starts. Only on the menu, and only among unlocked levels. */
+  select(levelIndex: number): void {
+    this.assertPlayable(levelIndex);
+    if (this.current !== 'menu' || levelIndex === this.currentLevelIndex) return;
+    this.currentLevelIndex = levelIndex;
+    this.go('menu');
+  }
+
   /** Starts a fresh round of the given level (also used to retry or play again). */
   play(levelIndex: number = this.currentLevelIndex): void {
+    this.assertPlayable(levelIndex);
     const level = this.deps.levels[levelIndex];
-    if (level === undefined) throw new RangeError(`Unknown level index ${levelIndex}`);
+    if (level === undefined) return; // unreachable: assertPlayable checked the range
     this.currentLevelIndex = levelIndex;
     this.currentOutcome = undefined;
     this.currentSession = new GameSession(
@@ -94,7 +142,17 @@ export class GameFlow {
     else if (this.current === 'paused') this.resume();
   }
 
+  /** After the end screen of a won level, goes on to the level that comes next. */
+  next(): void {
+    const target = this.currentOutcome?.nextLevelIndex;
+    if (this.current !== 'ended' || target === undefined) return;
+    this.play(target);
+  }
+
   toMenu(): void {
+    // After a win the menu offers the level that was just opened.
+    const advanced = this.currentOutcome?.nextLevelIndex;
+    if (advanced !== undefined) this.currentLevelIndex = advanced;
     this.currentSession = undefined;
     this.currentOutcome = undefined;
     this.go('menu');
@@ -109,14 +167,33 @@ export class GameFlow {
   private finish(result: RoundOutcome['result']): void {
     const state = this.currentSession?.state;
     if (state === undefined) return;
+    const level = this.deps.levels[this.currentLevelIndex];
+    if (level !== undefined && state.score > (this.bestScores[level.id] ?? 0)) {
+      this.bestScores = { ...this.bestScores, [level.id]: state.score };
+    }
+    const hasNext = this.currentLevelIndex + 1 < this.deps.levels.length;
+    if (result === 'won' && hasNext) {
+      this.frontierIndex = Math.max(this.frontierIndex, this.currentLevelIndex + 1);
+    }
     this.currentOutcome = {
       result,
       levelIndex: this.currentLevelIndex,
       score: state.score,
       hits: state.hits,
       throws: state.throws,
+      nextLevelIndex: result === 'won' && hasNext ? this.currentLevelIndex + 1 : undefined,
+      campaignComplete: result === 'won' && !hasNext,
     };
     this.go('ended');
+  }
+
+  private assertPlayable(levelIndex: number): void {
+    if (!Number.isInteger(levelIndex) || levelIndex < 0 || levelIndex >= this.deps.levels.length) {
+      throw new RangeError(`Unknown level index ${levelIndex}`);
+    }
+    if (levelIndex > this.frontierIndex) {
+      throw new RangeError(`Level index ${levelIndex} is still locked`);
+    }
   }
 
   private go(screen: Screen): void {

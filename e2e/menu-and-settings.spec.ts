@@ -19,6 +19,34 @@ test.describe('menu', () => {
   });
 });
 
+test.describe('level picker', () => {
+  test('a new player can only open level 1; the others are locked', async ({ game, page }) => {
+    const picker = page.locator('.levels__group button');
+    await expect(picker).toHaveCount(12);
+    await expect(picker.first()).toBeEnabled();
+    await expect(picker.first()).toHaveAttribute('aria-pressed', 'true');
+    await expect(picker.first()).toHaveAccessibleName('Level 1: Sandy Shore');
+    await expect(picker.nth(1)).toBeDisabled();
+    await expect(picker.nth(1)).toHaveAccessibleName('Level 2: locked');
+    await expect(picker.last()).toBeDisabled();
+    await expect(page.locator('.levels__selected')).toHaveText('Level 1 · Sandy Shore');
+    await expect(game.canvas).toHaveAttribute('aria-label', /across the beach/);
+  });
+
+  test('the picker is in Portuguese too', async ({ game, page }) => {
+    await game.expectScreen('menu');
+    await page.getByRole('button', { name: 'Português' }).click();
+    await expect(page.locator('.levels__selected')).toHaveText('Nível 1 · Praia Calma');
+    await expect(page.locator('.levels__group button').nth(2)).toHaveAccessibleName(
+      'Nível 3: bloqueado',
+    );
+  });
+
+  test('the Play button stays reachable on the menu', async ({ game }) => {
+    await expect(game.primaryButton()).toBeInViewport();
+  });
+});
+
 test.describe('settings', () => {
   test('language switch rewrites every text and keeps the round running', async ({
     game,

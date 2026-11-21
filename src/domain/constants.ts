@@ -7,6 +7,9 @@ import type { Vec2 } from './geometry';
 export const FIELD_WIDTH_PX = 180;
 export const FIELD_HEIGHT_PX = 320;
 
+/** Where the water ends and the ground (where the crabs walk) begins, in field pixels. */
+export const SHORELINE_Y_PX = 116;
+
 /** Where every flip flop leaves the player's hand. */
 export const THROW_ORIGIN: Vec2 = { x: FIELD_WIDTH_PX / 2, y: FIELD_HEIGHT_PX - 8 };
 

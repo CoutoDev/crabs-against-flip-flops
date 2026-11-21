@@ -27,10 +27,28 @@ export const en = {
   'hud.combo': 'Combo',
   'hud.goal': 'Goal',
   'hud.level': 'Level {level}',
+  'levels.1.name': 'Sandy Shore',
+  'levels.2.name': 'Low Tide',
+  'levels.3.name': 'Swimmers Ahoy',
+  'levels.4.name': 'Rocky Point',
+  'levels.5.name': 'Tide Pools',
+  'levels.6.name': 'Fiddler Ridge',
+  'levels.7.name': 'Mangrove Edge',
+  'levels.8.name': 'Root Maze',
+  'levels.9.name': 'Deep Swamp',
+  'levels.10.name': 'Moonlit Beach',
+  'levels.11.name': 'Midnight Scuttle',
+  'levels.12.name': "The Crab King's Night",
+  'menu.levels': 'Choose a level',
+  'menu.levelOpen': 'Level {level}: {name}',
+  'menu.levelLocked': 'Level {level}: locked',
+  'menu.selected': 'Level {level} · {name}',
   'round.won.title': 'Level cleared!',
   'round.lost.title': 'Out of flip flops!',
   'round.summary': 'Score {score} · {hits} hits in {throws} throws',
+  'round.next': 'Next level',
   'round.again': 'Play again',
+  'round.campaign.title': 'Campaign complete!',
   'round.retry': 'Try again',
   'round.menu': 'Main menu',
   'pause.title': 'Paused',
@@ -40,7 +58,13 @@ export const en = {
   'sound.off': 'Sound: off',
   'controls.help':
     'Click or tap the field to throw. Keyboard: arrow keys or WASD aim (Shift = faster), Space or Enter throws, P or Esc pauses.',
-  'canvas.label': 'Game field: crabs walk sideways across the beach. Throw flip flops at them.',
+  'canvas.label.beach':
+    'Game field: crabs walk sideways across the beach. Throw flip flops at them.',
+  'canvas.label.rocks': 'Game field: crabs scuttle across a rocky shore. Throw flip flops at them.',
+  'canvas.label.mangrove':
+    'Game field: crabs scuttle along the mangrove mud. Throw flip flops at them.',
+  'canvas.label.night':
+    'Game field: crabs scuttle across the beach at night. Throw flip flops at them.',
   'announce.milestone': 'Milestone: {milestone}',
 } as const satisfies Record<string, Message>;
 

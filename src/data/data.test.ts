@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SHORELINE_Y_PX } from '../domain/constants';
 import { CRAB_TYPE_IDS } from '../domain/entities/crab';
 import { validateLevel } from '../domain/rules/level-validation';
 import { CRAB_TYPES } from './crab-types';
@@ -22,5 +23,32 @@ describe('levels data', () => {
 
   it.each(LEVELS.map((level) => [level.id, level] as const))('level %i is valid', (_id, level) => {
     expect(validateLevel(level, CRAB_TYPES)).toEqual([]);
+  });
+
+  it('walks through the biomes in order: beach, rocks, mangrove, night', () => {
+    const order = ['beach', 'rocks', 'mangrove', 'night'] as const;
+    const ranks = LEVELS.map((level) => order.indexOf(level.biome));
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+    expect(new Set(LEVELS.map((level) => level.biome))).toEqual(new Set(order));
+  });
+
+  it.each(LEVELS.map((level) => [level.id, level] as const))(
+    'level %i keeps its crabs on the ground, below the shoreline',
+    (_id, level) => {
+      expect(level.spawn.laneY.min).toBeGreaterThan(SHORELINE_Y_PX);
+    },
+  );
+
+  it('introduces the crab types gradually: swimmers before fiddlers, none on level 1 but commons', () => {
+    const firstLevelWith = (type: string) =>
+      LEVELS.findIndex((level) => level.crabs.some((entry) => entry.type === type));
+    expect(LEVELS[0]?.crabs.map((entry) => entry.type)).toEqual(['common']);
+    expect(firstLevelWith('swimmer')).toBeGreaterThan(0);
+    expect(firstLevelWith('fiddler')).toBeGreaterThan(firstLevelWith('swimmer'));
+  });
+
+  it('asks for more points as the campaign goes on', () => {
+    const targets = LEVELS.map((level) => level.targetScore);
+    expect(targets).toEqual([...targets].sort((a, b) => a - b));
   });
 });
