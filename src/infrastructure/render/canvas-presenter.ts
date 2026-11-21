@@ -26,11 +26,14 @@ export class CanvasPresenter {
     this.context.putImageData(this.image, 0, 0);
   }
 
-  /** Fits the canvas in the available box using the largest integer scale (crisp pixels). */
-  fit(availableWidth: number, availableHeight: number): number {
-    const scale = computeIntegerScale(availableWidth, availableHeight);
+  /**
+   * Fits the canvas in the available box (CSS pixels) with the largest scale that maps every field
+   * pixel to a whole number of device pixels (crisp pixels, finer steps on high-density phones).
+   */
+  fit(availableWidth: number, availableHeight: number, devicePixelRatio = 1): number {
+    const scale = computeIntegerScale(availableWidth, availableHeight, devicePixelRatio);
     // Only the width is set: CSS keeps the aspect ratio, so `max-width: 100%` can still shrink it
-    // on screens narrower than the field (below 1x the pixels are no longer perfectly crisp).
+    // if a window is narrower than the field (then the pixels are no longer perfectly crisp).
     this.canvas.style.width = `${this.canvas.width * scale}px`;
     return scale;
   }

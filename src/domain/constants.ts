@@ -1,11 +1,14 @@
 import type { Vec2 } from './geometry';
 
-/** Logical playfield, in pixels (the renderer scales it by an integer factor). */
-export const FIELD_WIDTH_PX = 320;
-export const FIELD_HEIGHT_PX = 180;
+/**
+ * Logical playfield, in pixels. Portrait (9:16) so it fills a phone held upright; on a desktop the
+ * same field is simply shown centered. The renderer scales it by an integer factor.
+ */
+export const FIELD_WIDTH_PX = 180;
+export const FIELD_HEIGHT_PX = 320;
 
 /** Where every flip flop leaves the player's hand. */
-export const THROW_ORIGIN: Vec2 = { x: 160, y: 172 };
+export const THROW_ORIGIN: Vec2 = { x: FIELD_WIDTH_PX / 2, y: FIELD_HEIGHT_PX - 8 };
 
 /** Tolerance added to a crab's hit radius when a flip flop lands. */
 export const SLIPPER_RADIUS_PX = 6;

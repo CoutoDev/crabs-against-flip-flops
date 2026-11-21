@@ -2,7 +2,7 @@ import { FIELD_HEIGHT_PX, FIELD_WIDTH_PX } from '../domain/constants';
 import { clamp, type Vec2 } from '../domain/geometry';
 
 /** Keyboard aiming cursor: where it starts, and how far arrow keys move it. */
-export const DEFAULT_AIM: Vec2 = { x: FIELD_WIDTH_PX / 2, y: 110 };
+export const DEFAULT_AIM: Vec2 = { x: FIELD_WIDTH_PX / 2, y: 200 };
 export const AIM_STEP_PX = 8;
 export const AIM_FAST_STEP_PX = 24;
 

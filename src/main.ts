@@ -71,7 +71,7 @@ const presenter = new CanvasPresenter(view.canvas, frame);
 
 function refit(): void {
   const { width, height } = view.availableSize();
-  presenter.fit(width, height);
+  presenter.fit(width, height, window.devicePixelRatio);
 }
 
 bindSfx(bus, sfx);
@@ -104,6 +104,7 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('blur', () => flow.pause());
 window.addEventListener('resize', refit);
+view.onLayoutChange(refit);
 
 view.setTranslator(translator, muted);
 view.showScreen(flow.screen, flow.outcome);

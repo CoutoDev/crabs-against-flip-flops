@@ -45,7 +45,7 @@ describe('Effects', () => {
   it('celebrates a milestone at the top center', () => {
     const effects = new Effects();
     effects.handle({ type: 'ScoreMilestone', milestone: 50, score: 60 });
-    expect(effects.floaters[0]).toMatchObject({ text: '50', x: 160, color: COLOR.sun });
+    expect(effects.floaters[0]).toMatchObject({ text: '50', x: 90, color: COLOR.sun });
   });
 
   it('ignores events that have no visual effect', () => {
