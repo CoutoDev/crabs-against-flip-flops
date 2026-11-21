@@ -101,8 +101,26 @@ describe('Profile', () => {
     profile.setLocale('pt-BR');
     profile.setMuted(true);
     profile.setMuted(true);
-    expect(profile.data.settings).toEqual({ muted: true, volume: 1, locale: 'pt-BR' });
+    expect(profile.data.settings).toEqual({
+      muted: true,
+      music: true,
+      volume: 1,
+      locale: 'pt-BR',
+    });
     expect(saved).toHaveLength(2);
+  });
+
+  it('stores the music switch and the volume, clamping the volume to 0..1', () => {
+    const { profile, saved } = make();
+    profile.setMusic(false);
+    profile.setMusic(false);
+    profile.setVolume(0.4);
+    profile.setVolume(0.4);
+    profile.setVolume(7);
+    profile.setVolume(-1);
+    profile.setVolume(Number.NaN);
+    expect(profile.data.settings).toMatchObject({ music: false, volume: 1 });
+    expect(saved.map((data) => data.settings.volume)).toEqual([1, 0.4, 1, 0, 1]);
   });
 
   it('tells listeners about every change, until they unsubscribe', () => {

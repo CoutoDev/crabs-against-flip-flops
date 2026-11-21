@@ -79,6 +79,29 @@ export class Framebuffer {
     this.data.set(other.data);
   }
 
+  /**
+   * Moves the whole picture by whole pixels (screen shake). The edge that is uncovered repeats the
+   * outermost row or column, so no hole or flash of color appears.
+   */
+  shiftBy(dx: number, dy: number): void {
+    const shiftX = Math.round(dx);
+    const shiftY = Math.round(dy);
+    if (shiftX === 0 && shiftY === 0) return;
+    const source = this.data.slice();
+    for (let y = 0; y < this.height; y += 1) {
+      const sy = Math.min(this.height - 1, Math.max(0, y - shiftY));
+      for (let x = 0; x < this.width; x += 1) {
+        const sx = Math.min(this.width - 1, Math.max(0, x - shiftX));
+        const from = (sy * this.width + sx) * 4;
+        const to = (y * this.width + x) * 4;
+        this.data[to] = source[from] ?? 0;
+        this.data[to + 1] = source[from + 1] ?? 0;
+        this.data[to + 2] = source[from + 2] ?? 0;
+        this.data[to + 3] = source[from + 3] ?? 255;
+      }
+    }
+  }
+
   /** The RGB of a pixel, for tests and debugging. */
   rgbAt(x: number, y: number): readonly [number, number, number] {
     const offset = (y * this.width + x) * 4;

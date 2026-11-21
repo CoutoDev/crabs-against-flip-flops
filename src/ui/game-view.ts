@@ -8,6 +8,14 @@ import type { HudModel } from './hud-model';
 import type { Translator } from './i18n/translator';
 import { NameField, ShopList, skinName, type ShopModel } from './shop-view';
 
+/** What the settings panels show about the audio. */
+export interface AudioSettings {
+  readonly muted: boolean;
+  readonly music: boolean;
+  /** 0..1 */
+  readonly volume: number;
+}
+
 export interface ViewActions {
   play(): void;
   start(): void;
@@ -19,6 +27,8 @@ export interface ViewActions {
   toMenu(): void;
   setLocale(locale: Locale): void;
   toggleSound(): void;
+  toggleMusic(): void;
+  setVolume(volume: number): void;
   openShop(): void;
   closeShop(): void;
   buySkin(skinId: string): void;
@@ -60,14 +70,20 @@ function hudItem(modifier: string): HudItem {
   return { root: el('div', `hud__item hud__item--${modifier}`, label, value), label, value };
 }
 
-/** Language and sound controls. They live inside the dialogs (menu, pause) to leave the field room. */
+/** Language and audio controls. They live inside the dialogs (menu, pause) to leave the field room. */
 class SettingsPanel {
   readonly root = el('div', 'settings');
   private readonly label = el('span', 'settings__label');
   private readonly languages = new Map<Locale, HTMLButtonElement>();
   private readonly sound: HTMLButtonElement;
+  private readonly music: HTMLButtonElement;
+  private readonly volumeLabel = el('label', 'settings__label');
+  private readonly volume = el('input', 'settings__volume');
 
-  constructor(id: string, actions: Pick<ViewActions, 'setLocale' | 'toggleSound'>) {
+  constructor(
+    id: string,
+    actions: Pick<ViewActions, 'setLocale' | 'toggleSound' | 'toggleMusic' | 'setVolume'>,
+  ) {
     const group = el('div', 'settings__group', this.label);
     group.setAttribute('role', 'group');
     this.label.id = `${id}-language-label`;
@@ -79,18 +95,38 @@ class SettingsPanel {
       group.append(b);
     }
     this.sound = button('control', () => actions.toggleSound());
-    this.root.append(group, this.sound);
+    this.music = button('control', () => actions.toggleMusic());
+
+    this.volume.id = `${id}-volume`;
+    this.volume.type = 'range';
+    this.volume.min = '0';
+    this.volume.max = '100';
+    this.volume.step = '5';
+    this.volumeLabel.htmlFor = this.volume.id;
+    this.volume.addEventListener('input', () => actions.setVolume(Number(this.volume.value) / 100));
+
+    this.root.append(
+      group,
+      el('div', 'settings__group', this.sound, this.music),
+      el('div', 'settings__volume-row', this.volumeLabel, this.volume),
+    );
   }
 
-  update(translator: Translator, muted: boolean): void {
+  update(translator: Translator, audio: AudioSettings): void {
     const { t } = translator;
     this.label.textContent = t('settings.language');
     for (const [locale, b] of this.languages) {
       b.textContent = t(`language.${locale}`);
       b.setAttribute('aria-pressed', String(locale === translator.locale));
     }
-    this.sound.textContent = t(muted ? 'sound.off' : 'sound.on');
-    this.sound.setAttribute('aria-pressed', String(!muted));
+    this.sound.textContent = t(audio.muted ? 'sound.off' : 'sound.on');
+    this.sound.setAttribute('aria-pressed', String(!audio.muted));
+    this.music.textContent = t(audio.music ? 'music.on' : 'music.off');
+    this.music.setAttribute('aria-pressed', String(audio.music));
+    this.volumeLabel.textContent = t('settings.volume');
+    // Do not fight the thumb while it is being dragged.
+    if (document.activeElement !== this.volume)
+      this.volume.value = String(Math.round(audio.volume * 100));
   }
 }
 
@@ -224,6 +260,7 @@ export class GameView {
   readonly canvas = el('canvas', 'stage__canvas');
 
   private translator: Translator | undefined;
+  private audio: AudioSettings = { muted: false, music: true, volume: 1 };
   private screen: Screen = 'menu';
   private hasShownScreen = false;
   private outcome: RoundOutcome | undefined;
@@ -259,8 +296,8 @@ export class GameView {
   private readonly levelPicker: LevelPicker;
 
   constructor(root: HTMLElement, actions: ViewActions, icons: ViewIcons) {
-    this.pauseButton = button('control control--square', actions.pause);
-    this.pauseButton.textContent = 'II';
+    // The "II" glyph is drawn by CSS: it is a picture, so the accessible name is just "Pause".
+    this.pauseButton = button('control control--square control--pause', actions.pause);
 
     this.progress.max = 1;
     this.hud.append(
@@ -332,8 +369,15 @@ export class GameView {
     new ResizeObserver(listener).observe(this.hud);
   }
 
-  /** (Re)writes every static text. Call it whenever the language or the mute state changes. */
-  setTranslator(translator: Translator, muted: boolean): void {
+  /** Shows the current audio settings (sound, music, volume) in the settings panels. */
+  setAudio(audio: AudioSettings): void {
+    this.audio = audio;
+    if (this.translator === undefined) return;
+    for (const panel of this.settings) panel.update(this.translator, audio);
+  }
+
+  /** (Re)writes every static text. Call it whenever the language changes. */
+  setTranslator(translator: Translator): void {
     this.translator = translator;
     this.lastHud = undefined;
     const { t } = translator;
@@ -341,7 +385,7 @@ export class GameView {
     document.documentElement.lang = translator.locale;
     document.title = t('game.title');
     this.title.textContent = t('game.title');
-    for (const panel of this.settings) panel.update(translator, muted);
+    for (const panel of this.settings) panel.update(translator, this.audio);
     this.pauseButton.setAttribute('aria-label', t('pause.button'));
     this.hud.setAttribute('aria-label', t('game.title'));
     this.hudScore.label.textContent = t('hud.score');
@@ -480,7 +524,13 @@ export class GameView {
         : 'round.lost.title';
     this.ended.setTexts(
       t(title),
-      t('round.summary', { score: outcome.score, hits: outcome.hits, throws: outcome.throws }),
+      [
+        t('round.summary', { score: outcome.score, hits: outcome.hits, throws: outcome.throws }),
+        t('round.earned', { points: t('score.points', { count: outcome.score }) }),
+        outcome.newBest
+          ? t('round.newBest')
+          : t('round.best', { points: t('score.points', { count: outcome.bestScore }) }),
+      ].join('\n'),
       [
         outcome.nextLevelIndex === undefined ? undefined : t('round.next'),
         t(won ? 'round.again' : 'round.retry'),

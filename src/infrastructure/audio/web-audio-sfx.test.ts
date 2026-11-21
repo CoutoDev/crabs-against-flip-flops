@@ -224,3 +224,45 @@ describe('bindSfx', () => {
     expect(play).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('WebAudioSfx volume', () => {
+  it('scales the master gain by the volume and silences it when muted', async () => {
+    const fake = fakeAudio();
+    const sfx = new WebAudioSfx(fake.create);
+    await sfx.unlock();
+    const master = fake.log.gains[0];
+    const full = master?.gain.value as number;
+    sfx.setVolume(0.5);
+    expect(master?.gain.value).toBeCloseTo(full / 2);
+    sfx.setMuted(true);
+    expect(master?.gain.value).toBe(0);
+    sfx.setMuted(false);
+    expect(master?.gain.value).toBeCloseTo(full / 2);
+  });
+
+  it('applies a volume chosen before the audio exists once it is created', async () => {
+    const fake = fakeAudio();
+    const sfx = new WebAudioSfx(fake.create);
+    sfx.setVolume(0.25);
+    await sfx.unlock();
+    expect(fake.log.gains[0]?.gain.value).toBeCloseTo(0.35 * 0.25);
+  });
+
+  it('clamps the volume to 0..1', async () => {
+    const fake = fakeAudio();
+    const sfx = new WebAudioSfx(fake.create);
+    await sfx.unlock();
+    sfx.setVolume(5);
+    expect(fake.log.gains[0]?.gain.value).toBeCloseTo(0.35);
+    sfx.setVolume(-1);
+    expect(fake.log.gains[0]?.gain.value).toBe(0);
+  });
+
+  it('exposes the audio graph only after the first gesture, for the music', async () => {
+    const fake = fakeAudio();
+    const sfx = new WebAudioSfx(fake.create);
+    expect(sfx.graph).toBeUndefined();
+    await sfx.unlock();
+    expect(sfx.graph?.context).toBe(fake.context);
+  });
+});

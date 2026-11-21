@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FIELD_HEIGHT_PX, FIELD_WIDTH_PX } from '../../domain/constants';
 import { createRound, throwSlipper, type RoundState } from '../../domain/rules/round';
 import { makeCrab, makeLevel, TEST_CRAB_SPECS } from '../../domain/test-support';
+import { createRng } from '../../domain/rng';
 import { Effects } from './effects';
 import { Framebuffer } from './framebuffer';
 import { COLOR, PALETTE_RGB } from './palette';
@@ -82,6 +83,77 @@ describe('Scene', () => {
     scene.render(pink, { ...options, slipperSlots: [COLOR.magenta, COLOR.white] });
     scene.render(blue, { ...options, slipperSlots: [COLOR.sea, COLOR.white] });
     expect(pink.data).not.toEqual(blue.data);
+  });
+
+  describe('juice', () => {
+    const flying = (progress: number): RoundState => {
+      const state = throwSlipper(baseState(), { x: 90, y: 200 }).state;
+      return {
+        ...state,
+        flights: state.flights.map((f) => ({ ...f, elapsedMs: f.durationMs * progress })),
+      };
+    };
+    const hitAt = (effects: Effects): void =>
+      effects.handle({
+        type: 'CrabHit',
+        crabId: 1,
+        crabType: 'common',
+        position: { x: 90, y: 200 },
+        basePoints: 10,
+        multiplier: 1,
+        points: 10,
+        combo: 1,
+        score: 10,
+      });
+
+    it('leaves a trail behind a flip flop that has been flying for a while, in the skin color', () => {
+      const scene = new Scene();
+      const gold = newFrame();
+      const pink = newFrame();
+      const base = { state: flying(0.6), effects: new Effects(), aim: undefined };
+      scene.render(gold, { ...base, trail: [COLOR.sun] });
+      scene.render(pink, { ...base, trail: [COLOR.magenta] });
+      expect(gold.data).not.toEqual(pink.data);
+    });
+
+    it('draws no trail for a flip flop that has just left the hand', () => {
+      const scene = new Scene();
+      const a = newFrame();
+      const b = newFrame();
+      const base = { state: flying(0), effects: new Effects(), aim: undefined };
+      scene.render(a, { ...base, trail: [COLOR.sun] });
+      scene.render(b, { ...base, trail: [COLOR.magenta] });
+      expect(a.data).toEqual(b.data);
+    });
+
+    it('draws the particles of a hit', () => {
+      const scene = new Scene();
+      const quiet = newFrame();
+      const burst = newFrame();
+      const effects = new Effects();
+      hitAt(effects);
+      scene.render(quiet, { state: baseState(), effects: new Effects(), aim: undefined });
+      scene.render(burst, { state: baseState(), effects, aim: undefined });
+      expect(burst.data).not.toEqual(quiet.data);
+    });
+
+    it('shakes the picture while the effects ask for it, and stays still otherwise', () => {
+      const scene = new Scene();
+      const state = withCrabs(baseState(), makeCrab({ x: 90, y: 200 }));
+      const effects = new Effects({ rng: createRng(3) });
+      effects.handle({ type: 'ScoreMilestone', milestone: 100, score: 100 });
+      const shaken = newFrame();
+      for (let i = 0; i < 10 && effects.shake.x === 0 && effects.shake.y === 0; i += 1) {
+        effects.update(16);
+      }
+      scene.render(shaken, { state, effects, aim: undefined });
+      const plain = newFrame();
+      const noShake = new Effects();
+      noShake.handle({ type: 'ScoreMilestone', milestone: 100, score: 100 });
+      scene.render(plain, { state, effects: noShake, aim: undefined });
+      expect(effects.shake.x !== 0 || effects.shake.y !== 0).toBe(true);
+      expect(shaken.data).not.toEqual(plain.data);
+    });
   });
 
   it('renders every biome without throwing', () => {

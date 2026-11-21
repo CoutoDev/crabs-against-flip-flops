@@ -32,6 +32,8 @@ export const SFX_IDS = [
   'lose',
   'rejected',
   'click',
+  'buy',
+  'equip',
 ] as const;
 export type SfxId = (typeof SFX_IDS)[number];
 
@@ -103,6 +105,15 @@ export const SFX_SPECS: Readonly<Record<SfxId, SfxSpec>> = {
   click: {
     delayMs: 0,
     steps: [note(0, 30, 880, 0.15)],
+  },
+  // A coin: two quick rising notes.
+  buy: {
+    delayMs: 0,
+    steps: [note(0, 70, 988, 0.25), note(70, 220, 1319, 0.25)],
+  },
+  equip: {
+    delayMs: 0,
+    steps: [note(0, 50, 659, 0.18), note(50, 60, 784, 0.18)],
   },
 };
 

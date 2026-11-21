@@ -15,7 +15,7 @@ const valid = {
   bestScoreByLevel: { 1: 150, 2: 80 },
   ownedSkins: ['classic', 'ocean'],
   equippedSkin: 'ocean',
-  settings: { muted: true, volume: 0.5, locale: 'pt-BR' },
+  settings: { muted: true, music: false, volume: 0.5, locale: 'pt-BR' },
 };
 
 describe('defaultSave', () => {
@@ -28,7 +28,7 @@ describe('defaultSave', () => {
       bestScoreByLevel: {},
       ownedSkins: ['classic'],
       equippedSkin: 'classic',
-      settings: { muted: false, volume: 1, locale: null },
+      settings: { muted: false, music: true, volume: 1, locale: null },
     });
   });
 });
@@ -105,12 +105,18 @@ describe('parseSave', () => {
       { ...valid, settings: { muted: 'yes', volume: 7, locale: 'fr' } },
       RULES,
     );
-    expect(result.settings).toEqual({ muted: false, volume: 1, locale: null });
+    expect(result.settings).toEqual({ muted: false, music: true, volume: 1, locale: null });
     expect(parseSave({ ...valid, settings: 'x' }, RULES).settings).toEqual({
       muted: false,
+      music: true,
       volume: 1,
       locale: null,
     });
+  });
+
+  it('reads a save from before the music setting existed as "music on"', () => {
+    const old = { muted: true, volume: 0.5, locale: 'pt-BR' }; // no `music` key
+    expect(parseSave({ ...valid, settings: old }, RULES).settings.music).toBe(true);
   });
 
   it('does not trust inherited or polluting keys', () => {

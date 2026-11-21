@@ -428,4 +428,44 @@ describe('GameFlow', () => {
       expect(flow.screen).toBe('playing');
     });
   });
+
+  describe('best score in the outcome', () => {
+    const levelWithEasyHits = {
+      spawn: { intervalMs: { min: 1, max: 1 }, maxOnScreen: 1, laneY: { min: 100, max: 100 } },
+      crabs: [{ type: 'common' as const, weight: 1, speedPxPerSec: { min: 100, max: 100 } }],
+      throw: { speedPxPerSec: 100000, minFlightMs: 1, maxFlightMs: 1, arcHeightPx: 0 },
+    };
+    const hitOnce = (flow: GameFlow) => {
+      const session = must(flow.session);
+      for (let i = 0; i < 200 && !session.state.crabs.some((c) => c.x > 20 && c.x < 160); i += 1) {
+        session.advance(50);
+      }
+      const crab = must(session.state.crabs.find((c) => c.x > 20 && c.x < 160));
+      session.throwAt({ x: crab.x, y: crab.y });
+      session.advance(50);
+    };
+
+    it('reports the score as the best on the first round, without calling it a record', () => {
+      const { flow, bus } = setup(levelWithEasyHits);
+      begin(flow);
+      hitOnce(flow);
+      bus.publish({ type: 'RoundLost', score: 10 });
+      expect(flow.outcome).toMatchObject({ score: 10, bestScore: 10, newBest: false });
+    });
+
+    it('flags a round that beats the previous best, and keeps the old best otherwise', () => {
+      const { flow, bus } = setup(levelWithEasyHits, {
+        highestUnlockedLevel: 1,
+        bestScoreByLevel: { 1: 5 },
+      });
+      begin(flow);
+      hitOnce(flow);
+      bus.publish({ type: 'RoundLost', score: 10 });
+      expect(flow.outcome).toMatchObject({ bestScore: 10, newBest: true });
+
+      flow.retry();
+      bus.publish({ type: 'RoundLost', score: 0 });
+      expect(flow.outcome).toMatchObject({ score: 0, bestScore: 10, newBest: false });
+    });
+  });
 });

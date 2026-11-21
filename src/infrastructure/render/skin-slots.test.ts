@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SKIN_ID, SKINS } from '../../data/skins';
-import { SKIN_SLOTS, slotsForSkin } from './skin-slots';
+import { SKIN_SLOTS, SKIN_TRAILS, slotsForSkin, trailForSkin } from './skin-slots';
 import { DEFAULT_SLIPPER_SLOTS } from './sprites';
 
 describe('skins', () => {
@@ -26,5 +26,16 @@ describe('skins', () => {
 
   it('falls back to the original look for an unknown skin', () => {
     expect(slotsForSkin('removed-in-v2')).toBe(DEFAULT_SLIPPER_SLOTS);
+  });
+
+  it('has a trail for every skin of the catalog, each one different', () => {
+    expect(Object.keys(SKIN_TRAILS).sort()).toEqual(SKINS.map((skin) => skin.id).sort());
+    const trails = SKINS.map((skin) => trailForSkin(skin.id).join('/'));
+    expect(new Set(trails).size).toBe(SKINS.length);
+    for (const skin of SKINS) expect(trailForSkin(skin.id).length).toBeGreaterThan(0);
+  });
+
+  it('falls back to the default trail for an unknown skin', () => {
+    expect(trailForSkin('removed-in-v2')).toEqual(trailForSkin('classic'));
   });
 });

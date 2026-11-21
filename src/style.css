@@ -85,6 +85,10 @@ body {
   letter-spacing: -0.1em;
 }
 
+.control--pause::before {
+  content: 'II';
+}
+
 .control:disabled {
   opacity: 0.5;
   cursor: default;
@@ -233,6 +237,7 @@ body {
 
 .overlay__text {
   margin: 0;
+  white-space: pre-line; /* the end-of-round summary has one line per fact */
   max-width: 18rem;
   font-size: 0.9rem;
 }
@@ -433,6 +438,20 @@ body {
   width: 100%;
   font-size: 0.75rem;
   opacity: 0.85;
+}
+
+.settings__volume-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: center;
+  width: 100%;
+}
+
+.settings__volume {
+  width: 12rem;
+  min-height: 44px; /* a thumb needs room to land on it */
+  accent-color: var(--sun);
 }
 
 .help {
