@@ -1,6 +1,6 @@
 # ADR-0001 — Arquitetura do "Crabs Against Flip Flops" / "Caranguejos vs Chinelos"
 
-Status: **Aceita** (decisões D1–D15 acordadas em 2026-11-20; pendências na seção 7)
+Status: **Aceita** (D1–D15 acordadas em 2026-11-20; D16–D19, do M2, acordadas em 2026-11-20 e implementadas; pendências na seção 7)
 Data: 2026-11-20
 
 > Espelho do ADR-002 do projeto "Dev Projects" no claude.ai. Neste repositório, este arquivo é a fonte da verdade a partir de agora.
@@ -15,23 +15,27 @@ Propriedade intelectual: "Havaianas" é marca de terceiros. Os sprites serão or
 
 ## 2. Decisões
 
-| #   | Decisão          | Escolha                                                                                                                                                                                                                                                                                                                                       |
-| --- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Stack            | Vite + TypeScript estrito + Canvas 2D, sem framework de jogo. Testes com Vitest                                                                                                                                                                                                                                                               |
-| D2  | Arremesso        | Toque/clique no ponto de destino. O chinelo sai de um ponto fixo e voa em arco, com tempo de voo, até o ponto escolhido, então o jogador precisa adiantar o alvo. Equivalente por teclado (setas + espaço)                                                                                                                                    |
-| D3  | Arte e áudio     | Pixel art definida em código (matrizes de caracteres + paleta; skin = sprite/paleta alternativa). Áudio chiptune sintetizado via WebAudio. Nenhum arquivo de asset                                                                                                                                                                            |
-| D4  | Persistência     | `localStorage` atrás de uma interface de repositório (porta), schema versionado. Troca futura por API/conta sem tocar no domínio                                                                                                                                                                                                              |
-| D5  | Game loop        | Timestep fixo de 60 Hz com acumulador; renderização desacoplada da simulação                                                                                                                                                                                                                                                                  |
-| D6  | Resolução        | Canvas lógico 320×180, ampliado em múltiplos inteiros com `image-rendering: pixelated`                                                                                                                                                                                                                                                        |
-| D7  | Níveis           | Campanha finita (8 a 12 níveis), definida por dados, em biomas (praia, rochas, manguezal, noturno). Endless pode vir depois sem refatorar                                                                                                                                                                                                     |
-| D8  | Fim de rodada    | Munição limitada de chinelos por nível + meta de pontos. Bateu a meta, passa de nível; acabou a munição sem a meta, perde                                                                                                                                                                                                                     |
-| D9  | i18n             | pt-BR e en com dicionários TypeScript tipados, sem biblioteca. O domínio nunca produz texto: eventos e dados carregam chaves/ids e a UI traduz. `Intl.PluralRules` e `Intl.NumberFormat` para plural e números. Locale detectado de `navigator.languages`, fallback `en`, persistido em `settings.locale`. `<html lang>` atualizado ao trocar |
-| D10 | Nome             | "Crabs Against Flip Flops" (en) e "Caranguejos vs Chinelos" (pt-BR). Repositório: `crabs-against-flip-flops`                                                                                                                                                                                                                                  |
-| D11 | Colisão          | O acerto vale no ponto de pouso do chinelo (estilo artilharia), não ao longo da trajetória                                                                                                                                                                                                                                                    |
-| D12 | Saldo            | Os pontos da rodada são creditados ao saldo no fim de toda rodada, inclusive em derrota. A meta só controla a progressão                                                                                                                                                                                                                      |
-| D13 | UI               | Menus, loja, HUD textual e configurações em DOM (acessibilidade nativa, foco, leitor de tela) sobre o canvas. Canvas apenas para o mundo do jogo                                                                                                                                                                                              |
-| D14 | Marcos de pontos | Jingle e efeito a cada 100 pontos na rodada (valor em config, ajustável por nível)                                                                                                                                                                                                                                                            |
-| D15 | Skins            | Puramente cosméticas (sprite, paleta, rastro). Catálogo e preços propostos no M4 e aprovados antes de implementar                                                                                                                                                                                                                             |
+| #   | Decisão            | Escolha                                                                                                                                                                                                                                                                                                                                       |
+| --- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Stack              | Vite + TypeScript estrito + Canvas 2D, sem framework de jogo. Testes com Vitest                                                                                                                                                                                                                                                               |
+| D2  | Arremesso          | Toque/clique no ponto de destino. O chinelo sai de um ponto fixo e voa em arco, com tempo de voo, até o ponto escolhido, então o jogador precisa adiantar o alvo. Equivalente por teclado (setas + espaço)                                                                                                                                    |
+| D3  | Arte e áudio       | Pixel art definida em código (matrizes de caracteres + paleta; skin = sprite/paleta alternativa). Áudio chiptune sintetizado via WebAudio. Nenhum arquivo de asset                                                                                                                                                                            |
+| D4  | Persistência       | `localStorage` atrás de uma interface de repositório (porta), schema versionado. Troca futura por API/conta sem tocar no domínio                                                                                                                                                                                                              |
+| D5  | Game loop          | Timestep fixo de 60 Hz com acumulador; renderização desacoplada da simulação                                                                                                                                                                                                                                                                  |
+| D6  | Resolução          | Canvas lógico 320×180, ampliado em múltiplos inteiros com `image-rendering: pixelated`                                                                                                                                                                                                                                                        |
+| D7  | Níveis             | Campanha finita (8 a 12 níveis), definida por dados, em biomas (praia, rochas, manguezal, noturno). Endless pode vir depois sem refatorar                                                                                                                                                                                                     |
+| D8  | Fim de rodada      | Munição limitada de chinelos por nível + meta de pontos. Bateu a meta, passa de nível; acabou a munição sem a meta, perde                                                                                                                                                                                                                     |
+| D9  | i18n               | pt-BR e en com dicionários TypeScript tipados, sem biblioteca. O domínio nunca produz texto: eventos e dados carregam chaves/ids e a UI traduz. `Intl.PluralRules` e `Intl.NumberFormat` para plural e números. Locale detectado de `navigator.languages`, fallback `en`, persistido em `settings.locale`. `<html lang>` atualizado ao trocar |
+| D10 | Nome               | "Crabs Against Flip Flops" (en) e "Caranguejos vs Chinelos" (pt-BR). Repositório: `crabs-against-flip-flops`                                                                                                                                                                                                                                  |
+| D11 | Colisão            | O acerto vale no ponto de pouso do chinelo (estilo artilharia), não ao longo da trajetória                                                                                                                                                                                                                                                    |
+| D12 | Saldo              | Os pontos da rodada são creditados ao saldo no fim de toda rodada, inclusive em derrota. A meta só controla a progressão                                                                                                                                                                                                                      |
+| D13 | UI                 | Menus, loja, HUD textual e configurações em DOM (acessibilidade nativa, foco, leitor de tela) sobre o canvas. Canvas apenas para o mundo do jogo                                                                                                                                                                                              |
+| D14 | Marcos de pontos   | Jingle e efeito a cada 100 pontos na rodada (valor em config, ajustável por nível)                                                                                                                                                                                                                                                            |
+| D15 | Skins              | Puramente cosméticas (sprite, paleta, rastro). Catálogo e preços propostos no M4 e aprovados antes de implementar                                                                                                                                                                                                                             |
+| D16 | Arte e paleta (M2) | Paleta própria de 16 cores indexadas (`render/palette.ts`); sprites como matrizes de texto em TypeScript, com _slots_ de skin (`S` sola, `T` tira) para a loja do M4 trocar só as cores. Contraste WCAG da paleta coberto por teste.                                                                                                          |
+| D17 | Renderização (M2)  | Software: tudo é desenhado num `Framebuffer` RGBA 320×180 (testável em Node) e o canvas só recebe `putImageData`. Escala inteira via CSS com `image-rendering: pixelated`; fundo do bioma pré-renderizado uma vez.                                                                                                                            |
+| D18 | Orquestração (M2)  | `GameSession` (timestep fixo 60 Hz + acumulador) publica eventos num `EventBus`; áudio, efeitos, HUD e anúncios só assinam. `GameFlow` decide a tela (menu, jogando, pausa, fim) e `PlayerControls` traduz comandos (teclado, mouse, toque) em ações. Tudo em `application/`, sem DOM.                                                        |
+| D19 | Testes de UI (M2)  | Lógica de apresentação em módulos puros testados no Vitest (`hud-model`, `announce`, `keyboard-commands`, `game-loop` com scheduler injetado, `WebAudioSfx` com contexto falso). O DOM fica em cola fina e é verificado no navegador real (Playwright, fora do repositório por enquanto).                                                     |
 
 Por que D9 sem biblioteca: são 2 idiomas e algumas centenas de strings, sem carregamento sob demanda e sem formatação ICU complexa. Um dicionário tipado dá segurança em tempo de compilação (faltou uma chave em pt-BR, não compila) e zero dependência. O `Translator` fica atrás de uma interface, então trocar por i18next ou similar é localizado na camada de UI. Revisitar se aparecerem mais idiomas ou textos com gênero/concordância complexos.
 
@@ -45,16 +49,20 @@ src/
     constants.ts     campo 320×180, origem do arremesso, raio do chinelo, STEP_MS
     rules/           trajetória, colisão, pontuação, caranguejos, validação de nível, rodada (createRound/throwSlipper/step), loja
     events.ts        eventos de domínio (SlipperThrown, CrabHit, SlipperMissed, ScoreMilestone, LevelCleared, RoundLost, SkinPurchased)
-  application/       casos de uso + portas
-    use-cases/       StartLevel, ThrowSlipper, TickSimulation, PurchaseSkin, EquipSkin
-    ports/           ProgressRepository, EventBus
+  application/       orquestração, sem DOM (testada no Vitest)
+    event-bus.ts     pub/sub síncrono dos eventos de domínio
+    game-session.ts  uma rodada: timestep fixo 60 Hz + acumulador, publica eventos
+    game-flow.ts     telas (menu, jogando, pausa, fim) e resultado da rodada
+    player-controls.ts  comandos do jogador (teclado/mouse/toque) → ações; aim.ts, viewport.ts
     locale.ts        Locale, LOCALES, DEFAULT_LOCALE
+    (M4) use-cases/ e ports/ProgressRepository entram junto da persistência
   infrastructure/    adaptadores
-    storage/         LocalStorageProgressRepository (+ validação e migração de schema)
-    audio/           WebAudioSfx (assina eventos de domínio)
-    render/          CanvasRenderer (pixel art a partir de matrizes + paleta)
-    input/           PointerInput, KeyboardInput
-  ui/                telas DOM (menu, loja, pausa, fim de rodada), HUD e i18n
+    render/          palette, sprite(s), framebuffer, font, effects, background, scene, canvas-presenter
+    audio/           sfx-specs, sfx-for-event, web-audio-sfx, bind-sfx
+    input/           keyboard-commands (puro), dom-input (listeners)
+    browser/         game-loop (requestAnimationFrame com scheduler injetável)
+    storage/         (M4) LocalStorageProgressRepository (+ validação e migração de schema)
+  ui/                DOM (game-view: barra, HUD, diálogos), modelos puros (hud-model, announce) e i18n
     i18n/            catálogos tipados (messages/en.ts é a fonte), Translator, detectLocale
   data/              levels.ts, skins.ts (dados, não código)
 ```
@@ -129,14 +137,25 @@ interface SaveDataV1 {
 ## 7. Pendências
 
 1. **Catálogo de skins e preços:** proposta no M4, a aprovar antes de implementar (D15).
-2. **Hospedagem:** site estático (ex.: GitHub Pages) depois do MVP. O build já usa `base: './'`.
-3. **Licença:** a definir antes de tornar o repositório público. Sem licença, o código fica com todos os direitos reservados.
+2. **Hospedagem:** resolvido. GitHub Pages via GitHub Actions (`deploy.yml`), build com `base: './'`.
+3. **Licença:** em aberto e urgente: o repositório já é público e sem licença, o que deixa todos os direitos reservados (ninguém pode legalmente reutilizar o código). Escolher uma licença (ex.: MIT) ou manter fechado de propósito.
 
 ## 8. Plano de marcos
 
 - **M0 — Scaffold:** Vite + TS estrito + Vitest + ESLint/Prettier, estrutura de pastas, CI, base de i18n. ✔ feito
 - **M1 — Núcleo de domínio (TDD):** trajetória, caranguejos, colisão, pontuação, fim de rodada. ✔ feito (valores iniciais de balanceamento em `src/data/`, a ajustar no playtest do M2)
-- **M2 — Esqueleto andante:** CanvasRenderer + input + SFX básicos; um nível jogável de ponta a ponta.
+- **M2 — Esqueleto andante:** renderer + input + SFX básicos; um nível jogável de ponta a ponta. ✔ feito (D16–D19; ver 8.1)
 - **M3 — Campanha:** níveis em dados, biomas, dificuldade crescente, progressão.
 - **M4 — Loja e persistência:** repositório em `localStorage`, saldo, skins, equipar, locale persistido.
 - **M5 — Acabamento:** áudio completo, juice (partículas, rastro), acessibilidade, deploy estático.
+
+### 8.1 Resultado do M2
+
+- Jogável de ponta a ponta: menu, rodada, pausa (botão, `P`/`Esc`, perda de foco da aba/janela), fim de rodada e jogar de novo, em pt-BR e en, com troca de idioma durante a rodada.
+- Entrada: mouse e toque (Pointer Events) e teclado (setas/WASD mira, `Shift` acelera, `Espaço`/`Enter` arremessa). `Espaço`/`Enter` em botão focado ativam o botão, nunca arremessam.
+- Áudio: SFX sintetizados (onda quadrada, triangular e ruído). O acerto sobe a escada pentatônica conforme o combo; o marco de pontos e a vitória são sequenciados, não empilhados. `AudioContext` nasce no primeiro gesto (botão Jogar, clique ou tecla).
+- Acessibilidade: `aria-live` só em marcos de pontuação (conforme a seção 6); o diálogo de fim de rodada recebe o foco; botões com alvo mínimo de 44 px; `Pausar` e HUD reservam espaço para o layout não pular entre telas.
+- Verificação: 266 testes unitários; `typecheck`, `lint`, `format:check` e `build` limpos (JS: 34,7 kB, 12,8 kB gzip). No Chrome real (Playwright, 41 verificações): teclado, toque, pausa, idiomas, mute, áudio agendado, escala inteira (3× em 1280×900, 2× em 1000×720, 1× em 360×640) e um bot que joga lendo os pixels do canvas e vence o nível 1.
+- Ajustes de projeto descobertos no M2: o texto do botão de idioma em pt-BR passou a ser "Português" (cabe em telas estreitas); o `Pausar` mora no HUD, não na barra superior (a barra quebrava de linha e o canvas perdia um degrau de escala).
+- Pendências de balanceamento (não bloqueiam o M3): o nível 1 é generoso para o bot (sobram chinelos). Ajustar com playtest humano. Por decisão (D8), não há cronômetro: quem fica parado nunca perde.
+- Sugestão em aberto (decisão sua): versionar os testes de navegador (Playwright como dependência de desenvolvimento, rodando no CI). Hoje a verificação de navegador é manual.
