@@ -1,6 +1,6 @@
 # ADR-0001 — Arquitetura do "Crabs Against Flip Flops" / "Caranguejos vs Chinelos"
 
-Status: **Aceita** (D1–D15 acordadas em 2026-11-20; D16–D19, do M2, acordadas em 2026-11-20 e implementadas; D6 revisada e D20 acordadas em 2026-11-21 e implementadas; D21–D24, do M3, definidas em 2026-11-21 sem consulta e **a revisar**; D25 pedida pelo usuário em 2026-11-21; D26–D28, do M4, implementadas; D29–D33, do M5, implementadas (escopo escolhido pelo usuário em 2026-11-21); D34, da revisão de desempenho, implementada (catálogo e preços de D15 aprovados em 2026-11-21); pendências na seção 7)
+Status: **Aceita** (D1–D15 acordadas em 2026-11-20; D16–D19, do M2, acordadas em 2026-11-20 e implementadas; D6 revisada e D20 acordadas em 2026-11-21 e implementadas; D21–D24, do M3, definidas em 2026-11-21 sem consulta e **a revisar**; D25 pedida pelo usuário em 2026-11-21; D26–D28, do M4, implementadas; D29–D33, do M5, implementadas (escopo escolhido pelo usuário em 2026-11-21); D34, da revisão de desempenho, implementada (catálogo e preços de D15 aprovados em 2026-11-21); D35–D37 (moedas, conquistas e poderes) **propostas em 2026-11-23, a aprovar, nada implementado** (seção 10); pendências na seção 7)
 Data: 2026-11-20
 
 > Espelho do ADR-002 do projeto "Dev Projects" no claude.ai. Neste repositório, este arquivo é a fonte da verdade a partir de agora.
@@ -51,6 +51,9 @@ Propriedade intelectual: "Havaianas" é marca de terceiros. Os sprites serão or
 | D32 | Acessibilidade (M5)               | `@axe-core/playwright` roda no E2E (WCAG 2.1 A/AA) em menu, loja, briefing, jogo, pausa e fim, também em pt-BR. Achado e corrigido: o botão de pausa tinha "II" visível e nome "Pausar" (`label-content-name-mismatch`); agora o glifo é desenhado por CSS. Controle de volume com rótulo e alvo de 44 px.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | D33 | App instalável (M5)               | `manifest.webmanifest` (caminhos relativos, vale em subcaminho do Pages), ícones 192/512 e `theme-color`; sem service worker (sem modo offline). Os PNGs são gerados do próprio sprite (`app-icon.ts`) e um teste compara o arquivo com a renderização; para regerar: `UPDATE_ICONS=1 npx vitest run app-icon`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | D34 | Desempenho (pós-M5)               | Revisão de desempenho feita por leitura do código (sem profiler). Aplicado: (1) `RepaintGate` decide por frame se o campo precisa ser redesenhado: menu, briefing, pausa e fim ficam parados; numa tela de 120 Hz uma rodada desenha no máximo uma vez por passo da simulação (que é 60 Hz e não é interpolada); animações de efeito ficam em ~60 quadros/s; (2) o nome digitado e o slider de volume ficam em memória na hora e são gravados uma vez depois de 400 ms sem mudanças (`Profile`, com `flush()` ao soltar o slider, sair do campo e em `pagehide`/aba escondida); a UI da loja e dos áudios só é refeita quando o que mostram muda; (3) os fundos dos outros biomas são desenhados em tempo ocioso; (4) `Framebuffer.shiftBy` (tremor) é in-place e sem alocação, validado contra uma implementação de referência. E2E guarda os contadores de `putImageData` e de `localStorage.setItem`. |
+| D35 | Moedas (a fazer, proposta)        | **A aprovar.** Duas unidades: **pontos** (desempenho: placar da rodada, recordes, futuro ranking) e **moedas** (o que se gasta). Fim de rodada: os pontos vão para o banco de pontos (o `balance` de hoje); na loja o jogador **converte** pontos em moedas numa taxa fixa em dados (proposta: 5 pontos = 1 moeda, que preserva o custo real das skins: 15/25/40/60/80/150). Skins e poderes passam a custar moedas; moedas também vêm de conquistas. Save v2 com migração sem perda do v1. Ver 10.2.                                                                                                                                                                                                                                                                                                                                                                                                    |
+| D36 | Conquistas (a fazer, proposta)    | **A aprovar.** Conquistas definidas por dados, avaliadas por função pura no fim da rodada pelo `Profile` (único escritor do save), a partir de estatísticas persistidas e de um acumulador que assina o `EventBus`. Recompensa: desbloquear itens exclusivos (skins e poderes) e/ou moedas. Tela própria, aviso por `aria-live`. O domínio não conhece conquistas. Ver 10.3.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| D37 | Poderes (a fazer, proposta)       | **A aprovar.** Poder = comportamento do arremesso, por dados, resolvido por regra pura que devolve a lista de pousos efetivos (explosão: área maior; boomerang: segundo pouso na volta). Item separado da skin (mantém D15: skin é só cosmética), equipado à parte, comprado em moedas ou ganho por conquista. Como o poder é gasto (sempre ativo, cargas por rodada, consumível ou recarga por combo) ainda precisa de decisão. Ver 10.4.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 Por que D9 sem biblioteca: são 2 idiomas e algumas centenas de strings, sem carregamento sob demanda e sem formatação ICU complexa. Um dicionário tipado dá segurança em tempo de compilação (faltou uma chave em pt-BR, não compila) e zero dependência. O `Translator` fica atrás de uma interface, então trocar por i18next ou similar é localizado na camada de UI. Revisitar se aparecerem mais idiomas ou textos com gênero/concordância complexos.
 
@@ -152,11 +155,12 @@ interface SaveDataV1 {
 
 ## 7. Pendências
 
-1. **Catálogo de skins e preços:** proposta no M4, a aprovar antes de implementar (D15).
+1. **Catálogo de skins e preços:** resolvido. Aprovado em 2026-11-21 e implementado no M4 (D27).
 2. **Hospedagem:** resolvido. GitHub Pages via GitHub Actions (`deploy.yml`), build com `base: './'`.
 3. **Licença:** em aberto e urgente: o repositório já é público e sem licença, o que deixa todos os direitos reservados (ninguém pode legalmente reutilizar o código). Escolher uma licença (ex.: MIT) ou manter fechado de propósito.
 
 4. **Desempenho, o que ficou de fora (D34):** `Framebuffer.setPixel` com checagens por pixel; alocações por frame em `Effects.update`, `Scene.drawCrabs` e `step()`; `getBoundingClientRect` a cada `pointermove` (cache invalidado no resize); `latencyHint: 'playback'` no contexto de áudio; fallback para navegadores sem `color-mix()`; medir em Android modesto e iPhone antigo (CPU 6× no DevTools). Fazer só se o profiler apontar.
+5. **Moedas, conquistas e poderes:** mapeados na seção 10 e **aguardando aprovação** (D35–D37); nada implementado.
 
 ## 8. Plano de marcos
 
@@ -166,7 +170,10 @@ interface SaveDataV1 {
 - **M3 — Campanha:** níveis em dados, biomas, dificuldade crescente, progressão. ✔ feito (D21–D24; ver 8.3)
 - **M4 — Loja e persistência:** repositório em `localStorage`, saldo, skins, equipar, locale persistido, nome do jogador. ✔ feito (D26–D28; ver 8.4)
 - **M5 — Acabamento:** áudio completo, juice (partículas, rastro), acessibilidade, deploy estático. ✔ feito (D29–D33; ver 8.5; o deploy já existia desde o M2)
-- **M6 — Placar compartilhado (a fazer):** top 10 entre jogadores, com servidor (seção 9).
+- **M6 — Placar compartilhado (a fazer):** top 10 entre jogadores, com servidor (seção 9). A regra de ranking depende da decisão sobre poderes (10.4).
+- **M7 — Moedas e catálogo de itens (a fazer, D35):** save v2, conversão de pontos em moedas, preços em moedas, loja genérica de itens (seção 10.2).
+- **M8 — Conquistas (a fazer, D36):** estatísticas, conquistas por dados, tela e desbloqueio de itens e moedas (seção 10.3).
+- **M9 — Poderes (a fazer, D37):** poderes de arremesso (explosão, boomerang), equipar, HUD, efeitos e balanceamento (seção 10.4).
 
 ### 8.1 Resultado do M2 (retrato do fim do M2; o campo 320×180 foi trocado, ver 8.2)
 
@@ -214,17 +221,6 @@ Motivo: no celular o campo 16:9 ficava pequeno e deitado. Decisão (2026-11-21):
 - Limite conhecido: o bot joga um chinelo por vez e mira com precisão; humanos arremessam vários e erram de forma diferente. Números de dificuldade para pessoas dependem de playtest (pendência herdada do M2).
 - Verificação: testes unitários, `typecheck`, `lint`, `format:check`, `build` e E2E limpos (ver commit).
 
-## 9. Placar compartilhado (a fazer, depois do M5)
-
-Pedido do usuário: um placar compartilhado entre os jogadores com os **10 melhores**. O M4 só deixou o gancho (o nome do jogador, D28). O que falta e o que decidir:
-
-- **Servidor:** o jogo é 100% local e estático (GitHub Pages), então o placar exige um serviço (função serverless + banco) e uma nova porta `ScoreboardRepository` (`submit`, `top(10)`), como já foi feito com `ProgressRepository`. Sem rede o jogo continua funcionando; o placar degrada para "indisponível".
-- **O que ranquear:** proposta: melhor pontuação de uma rodada por nível, ou soma dos melhores de todos os níveis (campanha). Decidir antes de desenhar a API; empates por quem chegou primeiro.
-- **Confiança:** o cliente pode ser adulterado (D4 já aceita isso para o save local). Para um placar público é preciso validar no servidor: limites plausíveis por nível (ver `maxPossibleScore`) e, se necessário, reexecutar a rodada, que é determinística (semente + arremessos). Limitar frequência de envio.
-- **Privacidade e moderação:** o nome é texto livre de terceiros. Hoje é restrito a letras e dígitos (D28), mas falta filtro de palavrões e uma forma de remover entradas. Mostrar só o nome, sem outro dado pessoal. Escrever isso na política do jogo antes de publicar.
-- **UI:** nova tela `scoreboard` no menu, em DOM (D13), com os 10 melhores e a posição do jogador; textos em pt-BR e en.
-- **Ordem sugerida:** (1) decidir regra de ranking e hospedagem, (2) API com validação, (3) porta e adaptador no cliente, (4) tela e testes E2E com a API simulada.
-
 ### 8.4 Resultado do M4: loja e persistência
 
 - Save no `localStorage` com validação campo a campo, recuperação de save corrompido e escrita sem lançar erros (D26). Idioma, mudo, nome, saldo, skins e progresso da campanha sobrevivem ao recarregar.
@@ -239,3 +235,77 @@ Pedido do usuário: um placar compartilhado entre os jogadores com os **10 melho
 - Fim de rodada com saldo e melhor pontuação; pausa sem texto duplicado para leitores de tela; axe sem violações nas 6 telas.
 - Instalável (manifest e ícones gerados do sprite).
 - **Não verificado por mim:** como a música soa (não há como ouvir aqui) e como o juice "se sente" em movimento. Os testes cobrem agenda, notas, estados e pixels, não gosto. Ajustar com playtest humano, como o balanceamento (pendência herdada).
+
+## 9. Placar compartilhado (a fazer, depois do M5)
+
+Pedido do usuário: um placar compartilhado entre os jogadores com os **10 melhores**. O M4 só deixou o gancho (o nome do jogador, D28). O que falta e o que decidir:
+
+- **Servidor:** o jogo é 100% local e estático (GitHub Pages), então o placar exige um serviço (função serverless + banco) e uma nova porta `ScoreboardRepository` (`submit`, `top(10)`), como já foi feito com `ProgressRepository`. Sem rede o jogo continua funcionando; o placar degrada para "indisponível".
+- **O que ranquear:** proposta: melhor pontuação de uma rodada por nível, ou soma dos melhores de todos os níveis (campanha). Decidir antes de desenhar a API; empates por quem chegou primeiro.
+- **Confiança:** o cliente pode ser adulterado (D4 já aceita isso para o save local). Para um placar público é preciso validar no servidor: limites plausíveis por nível (ver `maxPossibleScore`) e, se necessário, reexecutar a rodada, que é determinística (semente + arremessos). Limitar frequência de envio.
+- **Privacidade e moderação:** o nome é texto livre de terceiros. Hoje é restrito a letras e dígitos (D28), mas falta filtro de palavrões e uma forma de remover entradas. Mostrar só o nome, sem outro dado pessoal. Escrever isso na política do jogo antes de publicar.
+- **UI:** nova tela `scoreboard` no menu, em DOM (D13), com os 10 melhores e a posição do jogador; textos em pt-BR e en.
+- **Ordem sugerida:** (1) decidir regra de ranking e hospedagem, (2) API com validação, (3) porta e adaptador no cliente, (4) tela e testes E2E com a API simulada.
+
+## 10. Backlog mapeado: moedas, conquistas e poderes (a fazer, não implementado)
+
+Pedido do usuário em 2026-11-23: mapear e registrar, **sem desenvolver agora**. Tudo abaixo é **proposta a aprovar** (regra do projeto: decisão de arquitetura só depois de acordo); as perguntas em aberto estão em 10.5.
+
+Ponto de partida (produção, `main` em 6d7c44e, 2026-11-21): há uma única moeda, os pontos. No fim de toda rodada `Profile.recordRound` (acionado por `GameFlow.onRoundEnd`) soma os pontos ao `balance` (D12, D26) e a loja gasta esse `balance` em skins só de cor (D27). Skin é só cosmética (D15). O acerto vale no pouso e um chinelo acerta no máximo um caranguejo (D11). `step` e `throwSlipper` são puros e determinísticos (RNG semeado).
+
+### 10.1 Ordem e dependências
+
+| Marco | Conteúdo                                                  | Depende de                                                                      |
+| ----- | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| M7    | Moedas, save v2, loja genérica de itens                   | nada (é a base: tudo tem preço)                                                 |
+| M8    | Conquistas, estatísticas, desbloqueio de itens e moedas   | M7 (forma de aquisição do item, recompensa em moedas, save v2)                  |
+| M9    | Poderes (simulação, efeitos, equipar, HUD, balanceamento) | M7 (poder à venda) e M8 (poder por conquista; pode sair antes só com a compra)  |
+| M6    | Placar compartilhado (já planejado, seção 9)              | independente no código, mas a regra de ranking depende da decisão sobre poderes |
+
+Por quê: os poderes são a única parte que mexe na simulação (maior risco e balanceamento), então vão por último; as moedas vêm primeiro porque tudo passa a ser precificado nelas.
+
+### 10.2 Moedas (D35)
+
+- **Modelo:** pontos medem desempenho e nunca são gastos direto. Fim de rodada: os pontos entram no **banco de pontos** (o `balance` de hoje). Na loja, **Converter** troca pontos por moedas na taxa de dados (`data/economy.ts`, `POINTS_PER_COIN`); a sobra fica no banco (arredonda para baixo). Moedas também podem vir de conquistas (10.3) e de bônus sem mexer nos pontos (ex.: primeira vitória de um nível).
+- **Taxa proposta: 5 pontos = 1 moeda.** Divide exatamente os preços atuais (75/125/200/300/400/750) e mantém o custo real: 15/25/40/60/80/150 moedas. Outra taxa exata é 25:1 (3/5/8/12/16/30). A taxa é dado, ajustável sem mexer em código.
+- **Save v2 e migração:** `parseSave` hoje só aceita a versão 1. A v2 passa a ter `points` (banco), `coins`, estatísticas (10.3), `ownedPowers`/`equippedPower` (10.4) e `achievements`. Migração v1 → v2 sem perda: o `balance` antigo vira banco de pontos, `coins` = 0, skins e progresso ficam.
+- **Código afetado hoje:** `domain/rules/shop.ts` (`ShopState.balance`, `buySkin`), `domain/entities/skin.ts` e `data/skins.ts` (preço), `application/save-data.ts`, `application/profile.ts` (`recordRound`, `shopState`), `ui/shop-view.ts`, `ui/game-view.ts` (diálogo do fim de rodada, "Somados ao seu saldo"), i18n en/pt-BR, `main.ts`, testes de `shop`, `save-data`, `profile`, do repositório de `localStorage` e o E2E `profile.spec.ts`.
+- **Novo:** regra pura `domain/rules/economy.ts` (`convertPoints`: recusa quantidade acima do banco ou que não completa 1 moeda), controle de conversão na loja ("Converter tudo", talvez com quantidade), preços e saldo em moedas, banco de pontos visível.
+- **Generalização recomendada junto (para M8 e M9 não refazerem a loja):** item com `kind: 'skin' | 'power'` e `acquire: { coins: n } | { achievement: id }`; `buySkin` vira `buyItem`.
+- **Riscos:** mudar a taxa depois altera o preço real (aceitável, é dado); jogadores com pontos acumulados veem a unidade mudar, então a loja mostra o banco de pontos e quanto ele rende em moedas.
+
+### 10.3 Conquistas (D36)
+
+- **Definição por dados** (`data/achievements.ts`): `id`, condição (tipo + limite, ex.: `{ kind: 'combo', atLeast: 6 }`), recompensa (`{ items: [ids], coins?: n }`) e `hidden?`. Textos por chave `achievements.<id>.name` e `.description` (os testes de paridade de i18n já cobrem os dois idiomas).
+- **Avaliação:** função pura `evaluateAchievements(stats, resumoDaRodada, desbloqueadas) → ids novos`, chamada no fim da rodada pelo `Profile` (único escritor do save, D26). Condições que dependem de eventos da rodada (ex.: combo, acertos por tipo) vêm de um acumulador que assina o `EventBus`, como HUD e áudio. O domínio não conhece conquistas.
+- **Estatísticas novas no save v2:** rodadas, vitórias, arremessos, acertos, melhor combo, acertos por tipo de caranguejo, níveis concluídos, pontos totais. Hoje só existe `bestScoreByLevel`.
+- **Exemplos para escolher (nenhum decidido):** primeiro acerto; combo ×4; vencer sem errar nenhum arremesso; vencer com 5+ chinelos sobrando; acertar N violinistas; concluir cada bioma; concluir a campanha; somar N pontos no total.
+- **Recompensa:** itens exclusivos (skins e poderes que não se compram) e/ou moedas. Proposta: um item é **ou** comprado **ou** conquistado, nunca os dois. Na loja, o item por conquista aparece bloqueado com a dica de como obtê-lo.
+- **UI:** nova tela `achievements` no menu, em DOM (D13): lista com progresso por contador, bloqueadas com dica, ocultas como "???" até serem ganhas (se `hidden`). Desbloqueio anunciado por `aria-live` educado (como os marcos, seção 6) e listado no diálogo de fim de rodada; respeita `prefers-reduced-motion`; entra no axe do E2E (D32).
+- **Persistência:** `achievements` no save v2; id desconhecido é descartado na leitura (como skins); remover uma conquista do catálogo não quebra o save. Adulteração local é aceita (D4).
+- **Código afetado/novo:** `application/save-data.ts`, `application/profile.ts`, novos `application/achievements.ts` e `application/round-stats.ts`, `data/achievements.ts`, `ui/` (tela e anúncio), i18n, E2E.
+
+### 10.4 Poderes (D37)
+
+- **O que existe e limita o desenho:** acerto só no pouso (D11); um chinelo acerta no máximo um caranguejo; `SlipperFlight` é função pura do tempo; `maxPossibleScore` valida metas alcançáveis em `level-validation.ts`; `data/balance.test.ts` protege a curva de dificuldade com um bot que joga um chinelo por vez.
+- **Modelo proposto:** poder é comportamento do arremesso, definido por dados e resolvido por regra pura (`domain/rules/powers.ts`) que, dados o alvo e o estado, devolve a lista de **pousos efetivos** (ponto, raio de acerto, atraso). Colisão (`findHitCrab`), pontuação e eventos seguem como estão, chamados uma vez por pouso.
+  - **Normal:** um pouso no alvo (como hoje).
+  - **Explosão:** pouso com raio de acerto ampliado; acerta vários caranguejos num arremesso.
+  - **Boomerang:** pouso no alvo e um segundo pouso na volta (trajeto de retorno até a origem), com atraso; duas chances de acerto com um chinelo.
+  - **Candidatos futuros (sem prioridade):** leque (3 pousos), gelo (desacelera caranguejos), ímã (puxa o mais próximo), ouro (pontos ×2), perfurante (acerta todos num segmento).
+- **Skin × poder:** D15 diz que skin é só cosmética. Proposta: poder é **item separado**, equipado à parte (qualquer skin com qualquer poder). "Chinelo com poder" vira apresentação: uma conquista pode dar skin e poder juntos. Alternativa descartada por ora: skin com poder embutido (quebraria D15).
+- **Como o poder é gasto (decisão crítica, muda todo o balanceamento):** (A) ativo em todo arremesso, sem custo (simples e forte, deve quebrar a campanha); (B) **cargas por rodada**, definidas por dados por poder, e o arremesso com poder gasta uma carga além do chinelo; (C) **consumível** comprado em moedas, com estoque no save; (D) **recarga por combo** (carrega ao acertar, usa quando cheio). Recomendação: (B), com (D) como evolução. Confiança moderada; precisa de playtest.
+- **Pontuação em multi-acerto (proposta):** o combo conta por arremesso que acertou algo, e o multiplicador vigente vale para todos os acertos desse arremesso.
+- **Código afetado/novo:** `domain/entities/slipper.ts` (poder e fases no voo), `domain/events.ts` (`CrabHit` por caranguejo, `SlipperMissed` por pouso, evento novo `PowerUsed`), `domain/rules/round.ts`, `collision.ts`, `scoring.ts`, `level-validation.ts`, `data/powers.ts`, `data/balance.test.ts` (curva por poder), render (`sprites`, `effects`, `scene`: animações de explosão e boomerang), áudio (`sfx-specs`, `sfx-for-event`), HUD (cargas), seleção do poder (loja e briefing), save v2, i18n, E2E e axe.
+- **Riscos:** (1) balanceamento: poderes facilitam uma campanha desenhada para o chinelo normal; mitigar com cargas limitadas e nova simulação por poder; (2) determinismo: poderes só podem usar estado e RNG semeado (o lint já proíbe `Date.now` e `Math.random` no domínio), senão replays e a validação futura do placar quebram; (3) **placar (M6):** com poderes as rodadas deixam de ser comparáveis, então decidir antes de construir o placar (ranquear só sem poder, ranking por poder, ou poder sem pontos extras); (4) acessibilidade: efeito de explosão sem depender só de cor ou som, `prefers-reduced-motion`, nome e cargas do poder em texto no HUD e na loja; (5) campo pequeno (180×320): a área da explosão precisa caber sem cobrir o campo todo.
+
+### 10.5 Perguntas para aprovação
+
+1. **Moedas:** conversão **manual** na loja (recomendada: migração sem perda, dá sentido a duas unidades) ou **automática** no fim da rodada (mais simples, mas vira só renomear a moeda)?
+2. **Taxa:** 5 pontos = 1 moeda está bom? A conversão é só de pontos para moedas (recomendo não voltar)?
+3. **Bônus de moedas** fora dos pontos (primeira vitória de um nível, conquistas): sim ou não?
+4. **Conquistas:** podem ser ocultas? Dica de como desbloquear aparece nas bloqueadas (recomendo sim)? Quais itens exclusivos e quais conquistas (escolher a lista com você)?
+5. **Item por compra ou por conquista, nunca os dois** está bom?
+6. **Poderes:** gasto (A/B/C/D), poder separado da skin e quais dois primeiro (sugestão: explosão e boomerang)?
+7. **Placar (M6) e poderes:** rodadas com poder entram no ranking?
+8. **Ordem:** M7 → M8 → M9 (e M6 quando você quiser, depois de decidir o item 7)?
