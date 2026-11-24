@@ -6,8 +6,16 @@ test.describe('layout', () => {
     game,
     page,
   }) => {
-    for (const screen of ['menu', 'shop', 'briefing', 'playing'] as const) {
-      if (screen === 'shop') await page.getByRole('button', { name: /Shop|Loja/ }).click();
+    for (const screen of ['menu', 'audio', 'language', 'shop', 'briefing', 'playing'] as const) {
+      if (screen === 'audio') await game.openAudio();
+      if (screen === 'language') {
+        await game.back();
+        await game.openLanguage();
+      }
+      if (screen === 'shop') {
+        await game.back();
+        await game.tile('shop').click();
+      }
       if (screen === 'briefing') {
         await page.getByRole('button', { name: /Back|Voltar/ }).click();
         await game.openBriefing();

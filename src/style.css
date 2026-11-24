@@ -6,6 +6,13 @@
   --coral: #f26a3d;
   --sun: #ffd23f;
   --white: #ffffff;
+  /* Darker shades for the hard "pixel" shadows under buttons and cards. */
+  --ink-dark: #0a1226;
+  --coral-dark: #a8431f;
+  --lime: #8fdc5a;
+  --slate: #3a4660;
+  /* A panel that sits on the dark dialogs: slightly lighter than them. */
+  --panel: color-mix(in srgb, var(--deep-sea) 38%, var(--ink));
   color-scheme: dark;
 }
 
@@ -44,21 +51,51 @@ body {
   max-width: 100%;
 }
 
-/* ── Buttons (44 px minimum touch target) ───────────────────────────────────────────────── */
+/* ── Buttons: chunky, with a hard shadow that sinks when pressed (48 px touch targets) ─────── */
+.icon {
+  display: block;
+  flex: none;
+  width: 1.25em;
+  height: 1.25em;
+}
+
 .control {
-  min-height: 44px;
-  min-width: 44px;
-  padding: 0.3rem 0.8rem;
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  min-width: 48px;
+  padding: 0.3rem 1rem;
   font: inherit;
-  font-size: 0.9rem;
-  color: var(--sand);
-  background: transparent;
-  border: 2px solid var(--sand);
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: var(--white);
+  background: var(--deep-sea);
+  border: 0;
+  box-shadow:
+    0 4px 0 var(--ink-dark),
+    inset 0 3px 0 rgb(255 255 255 / 0.18),
+    inset 0 -3px 0 rgb(0 0 0 / 0.25);
   cursor: pointer;
+  transition:
+    transform 60ms,
+    box-shadow 60ms;
 }
 
 .control:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--sand) 18%, transparent);
+  background: color-mix(in srgb, var(--deep-sea) 80%, var(--sand));
+}
+
+.control:active:not(:disabled),
+.tile:active,
+.switch:active,
+.language:active {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 var(--ink-dark),
+    inset 0 3px 0 rgb(255 255 255 / 0.12),
+    inset 0 -3px 0 rgb(0 0 0 / 0.25);
 }
 
 .control[aria-pressed='true'] {
@@ -67,21 +104,34 @@ body {
 }
 
 .control--primary {
+  min-width: 11rem;
+  min-height: 3.4rem;
+  font-size: 1.15rem;
   background: var(--coral);
-  border-color: var(--ink);
   color: var(--ink);
-  font-weight: bold;
-  font-size: 1rem;
-  min-width: 9rem;
+  box-shadow:
+    0 5px 0 var(--coral-dark),
+    inset 0 3px 0 rgb(255 255 255 / 0.3),
+    inset 0 -3px 0 rgb(0 0 0 / 0.15);
 }
 
 .control--primary:hover:not(:disabled) {
   background: var(--sun);
 }
 
+.control--primary:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 var(--coral-dark),
+    inset 0 3px 0 rgb(255 255 255 / 0.2);
+}
+
+.control--back {
+  min-width: 11rem;
+}
+
 .control--square {
   padding: 0;
-  font-weight: bold;
   letter-spacing: -0.1em;
 }
 
@@ -213,22 +263,54 @@ body {
   inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.7rem;
   align-items: center;
   /* `safe`: when the content is taller than the field it starts at the top and scrolls, instead of being cut at both ends. */
   justify-content: safe center;
-  padding: 0.75rem;
+  padding: 0.9rem 0.75rem;
   overflow: auto;
   text-align: center;
   line-height: 1.4;
-  background: color-mix(in srgb, var(--ink) 84%, transparent);
+  background: linear-gradient(
+    color-mix(in srgb, var(--ink) 92%, transparent),
+    color-mix(in srgb, var(--ink-dark) 94%, transparent)
+  );
 }
 
 .overlay__title {
   margin: 0;
-  font-size: clamp(1.1rem, 5vw, 1.6rem);
-  line-height: 1.2;
+  font-size: clamp(1.2rem, 5.5vw, 1.7rem);
+  line-height: 1.15;
   color: var(--sun);
+  /* A stacked hard shadow, like the title of an arcade game. */
+  text-shadow:
+    0 2px 0 var(--coral-dark),
+    0 4px 0 var(--ink-dark);
+}
+
+/* The big picture above the title of the audio, language and shop screens. */
+.overlay__badge {
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 3.6rem;
+  color: var(--ink);
+  background: var(--sun);
+  border: 3px solid var(--sand);
+  box-shadow:
+    0 4px 0 var(--ink-dark),
+    inset 0 3px 0 rgb(255 255 255 / 0.4),
+    inset 0 -3px 0 rgb(0 0 0 / 0.15);
+}
+
+.overlay__badge .icon {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.overlay[data-overlay='menu'] .overlay__title {
+  font-size: clamp(1.5rem, 8vw, 2.2rem);
+  line-height: 1.05;
 }
 
 .overlay[data-result='lost'] .overlay__title {
@@ -256,7 +338,11 @@ body {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  padding: 0.35rem 0.5rem;
   text-align: left;
+  background: var(--panel);
+  border: 3px solid color-mix(in srgb, var(--sand) 60%, var(--ink));
+  box-shadow: 0 3px 0 var(--ink-dark);
 }
 
 .targets__icon {
@@ -298,7 +384,7 @@ body {
   flex-direction: column;
   gap: 0.4rem;
   width: 100%;
-  max-width: 17rem;
+  max-width: 18rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -306,10 +392,14 @@ body {
 
 .skins__item {
   display: grid;
-  grid-template-columns: 3.4rem 1fr auto;
+  grid-template-columns: 3rem 1fr auto;
   gap: 0.6rem;
   align-items: center;
+  padding: 0.35rem 0.5rem;
   text-align: left;
+  background: var(--panel);
+  border: 3px solid color-mix(in srgb, var(--sand) 60%, var(--ink));
+  box-shadow: 0 3px 0 var(--ink-dark);
 }
 
 .skins__icon {
@@ -345,8 +435,8 @@ body {
 }
 
 .skins__action {
-  min-width: 5.2rem;
-  padding: 0.3rem 0.4rem;
+  min-width: 4.6rem;
+  padding: 0.3rem 0.3rem;
   font-size: 0.8rem;
 }
 
@@ -354,6 +444,50 @@ body {
   opacity: 1;
   color: var(--sun);
   border-color: var(--sun);
+}
+
+/* A row of icon buttons with captions, like the bottom bar of a mobile game. */
+.dock {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  width: 100%;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: center;
+  min-width: 4.6rem;
+  min-height: 4.2rem;
+  padding: 0.45rem 0.5rem 0.35rem;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: bold;
+  line-height: 1.1;
+  color: var(--sand);
+  background: var(--panel);
+  border: 3px solid var(--sand);
+  box-shadow:
+    0 4px 0 var(--ink-dark),
+    inset 0 3px 0 rgb(255 255 255 / 0.1);
+  cursor: pointer;
+}
+
+.tile:hover {
+  background: color-mix(in srgb, var(--panel) 75%, var(--sand));
+}
+
+.tile__icon {
+  display: grid;
+  place-items: center;
+  color: var(--sun);
+}
+
+.tile__icon .icon {
+  width: 1.7rem;
+  height: 1.7rem;
 }
 
 /* Name field on the menu. */
@@ -371,14 +505,15 @@ body {
 
 .name-field__input {
   width: 12rem;
-  min-height: 44px;
+  min-height: 48px;
   padding: 0.3rem 0.6rem;
   font: inherit;
   font-size: 1rem;
   color: var(--white);
   text-align: center;
-  background: color-mix(in srgb, var(--ink) 70%, transparent);
-  border: 2px solid var(--sand);
+  background: var(--ink-dark);
+  border: 3px solid var(--sand);
+  box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.4);
 }
 
 .name-field__input::placeholder {
@@ -402,14 +537,18 @@ body {
 .levels__group {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: 0.4rem;
   justify-content: center;
-  max-width: 16rem;
+  max-width: 17rem;
 }
 
 .control--level {
   padding: 0;
   font-weight: bold;
+}
+
+.control--level[aria-pressed='true'] {
+  background: var(--sun);
 }
 
 .levels__selected {
@@ -418,40 +557,234 @@ body {
   color: var(--sun);
 }
 
-.settings {
+/* ── Audio and language screens ──────────────────────────────────────────────────────────── */
+.settings,
+.languages {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  align-items: center;
-  margin-top: 0.4rem;
-}
-
-.settings__group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  align-items: center;
-  justify-content: center;
-}
-
-.settings__label {
+  gap: 0.7rem;
   width: 100%;
+  max-width: 19rem;
+}
+
+/* A settings card: icon, name and a switch, all one big button. */
+.switch,
+.language,
+.volume {
+  color: var(--white);
+  background: var(--panel);
+  border: 3px solid var(--sand);
+  box-shadow:
+    0 4px 0 var(--ink-dark),
+    inset 0 3px 0 rgb(255 255 255 / 0.08);
+}
+
+.switch,
+.language {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  width: 100%;
+  min-height: 3.8rem;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 60ms,
+    box-shadow 60ms;
+}
+
+.switch:hover,
+.language:hover {
+  background: color-mix(in srgb, var(--panel) 75%, var(--sand));
+}
+
+.switch__icon {
+  display: grid;
+  place-items: center;
+  color: var(--sun);
+}
+
+.switch__icon .icon {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+.switch__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.switch__label {
+  font-size: 0.95rem;
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+.switch__state {
   font-size: 0.75rem;
-  opacity: 0.85;
+  color: var(--sand);
 }
 
-.settings__volume-row {
+.switch__track {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 3.8rem;
+  height: 2.2rem;
+  background: var(--slate);
+  border: 3px solid var(--ink-dark);
+  box-shadow: inset 0 3px 0 rgb(0 0 0 / 0.3);
+}
+
+.switch__knob {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: 1.7rem;
+  background: var(--sand);
+  border: 2px solid var(--ink-dark);
+  box-shadow: inset 0 3px 0 rgb(255 255 255 / 0.5);
+  transition: left 120ms;
+}
+
+.switch[aria-checked='true'] .switch__track {
+  background: var(--lime);
+}
+
+.switch[aria-checked='true'] .switch__knob {
+  left: calc(100% - 1.7rem - 6px);
+}
+
+/* Volume: the slider is a wide bar with a big square thumb a finger can land on. */
+.volume {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  align-items: center;
-  width: 100%;
+  gap: 0.3rem;
+  padding: 0.6rem 0.7rem 0.4rem;
+  text-align: left;
 }
 
-.settings__volume {
-  width: 12rem;
-  min-height: 44px; /* a thumb needs room to land on it */
-  accent-color: var(--sun);
+.volume__head {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.volume__head .icon {
+  width: 1.7rem;
+  height: 1.7rem;
+  color: var(--sun);
+}
+
+.volume__label {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: bold;
+}
+
+.volume__value {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: var(--sun);
+}
+
+.volume__slider {
+  width: 100%;
+  height: 2.6rem;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+  --fill: 100%;
+  --bar: linear-gradient(90deg, var(--sun) var(--fill), var(--slate) var(--fill));
+}
+
+.volume__slider::-webkit-slider-runnable-track {
+  height: 1rem;
+  background: var(--bar);
+  border: 3px solid var(--ink-dark);
+  box-sizing: content-box;
+}
+
+.volume__slider::-moz-range-track {
+  height: 1rem;
+  background: var(--bar);
+  border: 3px solid var(--ink-dark);
+}
+
+.volume__slider::-webkit-slider-thumb {
+  width: 1.9rem;
+  height: 2.2rem;
+  margin-top: calc((1rem - 2.2rem) / 2);
+  background: var(--sand);
+  border: 3px solid var(--ink-dark);
+  box-shadow: inset 0 3px 0 rgb(255 255 255 / 0.6);
+  box-sizing: border-box;
+  appearance: none;
+}
+
+.volume__slider::-moz-range-thumb {
+  width: 1.9rem;
+  height: 2.2rem;
+  background: var(--sand);
+  border: 3px solid var(--ink-dark);
+  border-radius: 0;
+  box-shadow: inset 0 3px 0 rgb(255 255 255 / 0.6);
+  box-sizing: border-box;
+}
+
+/* Language cards: a badge, the name in its own language and a check on the one in use. */
+.language {
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+.language__badge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  font-size: 1rem;
+  color: var(--sun);
+  background: var(--deep-sea);
+  border: 3px solid var(--sand);
+}
+
+.language__name {
+  flex: 1;
+}
+
+.language__mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  color: var(--ink);
+  background: var(--lime);
+  border: 2px solid var(--ink-dark);
+  visibility: hidden;
+}
+
+.language__mark .icon {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.language[aria-pressed='true'] {
+  border-color: var(--sun);
+  background: color-mix(in srgb, var(--deep-sea) 70%, var(--ink));
+}
+
+.language[aria-pressed='true'] .language__mark {
+  visibility: visible;
 }
 
 .help {
@@ -502,7 +835,71 @@ body {
     white-space: normal;
   }
 
-  /* The field is only 180 px wide here: Start first, the list of targets after it. */
+  /* The field is only 180 px wide here: everything gets tighter and the decoration goes. */
+  .overlay {
+    gap: 0.45rem;
+    padding: 0.5rem 0.4rem;
+  }
+
+  .overlay__title,
+  .overlay[data-overlay='menu'] .overlay__title {
+    font-size: 1.15rem;
+  }
+
+  .overlay[data-overlay='menu'] .overlay__text {
+    display: none;
+  }
+
+  .overlay__badge,
+  .switch__icon,
+  .volume__head .icon {
+    display: none;
+  }
+
+  .switch,
+  .language {
+    gap: 0.5rem;
+    min-height: 3.2rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .switch__track {
+    width: 3.4rem;
+    height: 2rem;
+  }
+
+  .switch__knob {
+    width: 1.3rem;
+  }
+
+  .switch[aria-checked='true'] .switch__knob {
+    left: calc(100% - 1.3rem - 6px);
+  }
+
+  /* Three tiles share the 172 px of the field: no side padding, a hairline gap, small captions. */
+  .dock {
+    gap: 0.25rem;
+  }
+
+  .tile {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 3.4rem;
+    padding: 0.3rem 0.1rem;
+    font-size: 0.6rem;
+    border-width: 2px;
+  }
+
+  .control--primary {
+    min-width: 8rem;
+    min-height: 3rem;
+  }
+
+  .control--back {
+    min-width: 8rem;
+  }
+
+  /* Start first, the list of targets after it. */
   .overlay[data-overlay='briefing'] .targets {
     order: 1;
   }

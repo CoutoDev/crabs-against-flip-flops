@@ -95,4 +95,24 @@ describe('PlayerControls', () => {
     expect(flow.screen).toBe('ended');
     expect(controls.handle({ kind: 'pause' })).toBe(false);
   });
+
+  it('Esc/P is "back" on the audio and language screens', () => {
+    const { flow, controls } = setup();
+    flow.openAudio();
+    expect(controls.handle({ kind: 'pause' })).toBe(true);
+    expect(flow.screen).toBe('menu');
+    flow.openLanguage();
+    expect(controls.handle({ kind: 'pause' })).toBe(true);
+    expect(flow.screen).toBe('menu');
+  });
+
+  it('Back from the audio screen opened on the pause goes to the pause, not into the round', () => {
+    const { flow, controls } = setup();
+    flow.play();
+    flow.start();
+    flow.pause();
+    flow.openAudio();
+    expect(controls.handle({ kind: 'pause' })).toBe(true);
+    expect(flow.screen).toBe('paused');
+  });
 });

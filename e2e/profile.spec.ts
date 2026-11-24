@@ -136,11 +136,19 @@ test.describe('saved progress and settings', () => {
   });
 
   test('the language and the sound choice are remembered', async ({ game, page }) => {
-    await page.getByRole('button', { name: 'Português' }).click();
-    await page.getByRole('button', { name: /Som: ligado/ }).click();
+    await game.chooseLanguage('Português');
+    await game.openAudio();
+    await game.soundSwitch().click();
     await game.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
-    await expect(page.getByRole('button', { name: /Som: desligado/ })).toBeVisible();
+    await game.openAudio();
+    await expect(page.getByRole('switch', { name: 'Efeitos sonoros' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+    await game.back();
+    await game.openLanguage();
+    await expect(game.language('Português')).toHaveAttribute('aria-pressed', 'true');
   });
 
   test.describe('a damaged save', () => {

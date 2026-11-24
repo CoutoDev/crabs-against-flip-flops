@@ -1,20 +1,16 @@
-import type { RoundOutcome, Screen } from '../application/game-flow';
-import { LOCALES, type Locale } from '../application/locale';
+import type { RoundOutcome, Screen, SettingsOrigin } from '../application/game-flow';
+import type { Locale } from '../application/locale';
 import type { CrabType } from '../domain/entities/crab';
 import type { Biome } from '../domain/entities/level';
 import { canvasLabelKey, crabNameKey, levelName } from './campaign-text';
 import { button, el } from './dom';
 import type { HudModel } from './hud-model';
 import type { Translator } from './i18n/translator';
+import { icon, type IconName } from './icons';
+import { AudioPanel, LanguagePanel, tile, type AudioSettings, type Tile } from './settings-view';
 import { NameField, ShopList, skinName, type ShopModel } from './shop-view';
 
-/** What the settings panels show about the audio. */
-export interface AudioSettings {
-  readonly muted: boolean;
-  readonly music: boolean;
-  /** 0..1 */
-  readonly volume: number;
-}
+export type { AudioSettings } from './settings-view';
 
 export interface ViewActions {
   play(): void;
@@ -25,6 +21,10 @@ export interface ViewActions {
   resume(): void;
   pause(): void;
   toMenu(): void;
+  openAudio(): void;
+  openLanguage(): void;
+  /** Back from the audio or language screen. */
+  closeSettings(): void;
   setLocale(locale: Locale): void;
   toggleSound(): void;
   toggleMusic(): void;
@@ -72,82 +72,26 @@ function hudItem(modifier: string): HudItem {
   return { root: el('div', `hud__item hud__item--${modifier}`, label, value), label, value };
 }
 
-/** Language and audio controls. They live inside the dialogs (menu, pause) to leave the field room. */
-class SettingsPanel {
-  readonly root = el('div', 'settings');
-  private readonly label = el('span', 'settings__label');
-  private readonly languages = new Map<Locale, HTMLButtonElement>();
-  private readonly sound: HTMLButtonElement;
-  private readonly music: HTMLButtonElement;
-  private readonly volumeLabel = el('label', 'settings__label');
-  private readonly volume = el('input', 'settings__volume');
-
-  constructor(
-    id: string,
-    actions: Pick<
-      ViewActions,
-      'setLocale' | 'toggleSound' | 'toggleMusic' | 'setVolume' | 'commitVolume'
-    >,
-  ) {
-    const group = el('div', 'settings__group', this.label);
-    group.setAttribute('role', 'group');
-    this.label.id = `${id}-language-label`;
-    group.setAttribute('aria-labelledby', this.label.id);
-    for (const locale of LOCALES) {
-      const b = button('control', () => actions.setLocale(locale));
-      b.lang = locale;
-      this.languages.set(locale, b);
-      group.append(b);
-    }
-    this.sound = button('control', () => actions.toggleSound());
-    this.music = button('control', () => actions.toggleMusic());
-
-    this.volume.id = `${id}-volume`;
-    this.volume.type = 'range';
-    this.volume.min = '0';
-    this.volume.max = '100';
-    this.volume.step = '5';
-    this.volumeLabel.htmlFor = this.volume.id;
-    this.volume.addEventListener('input', () => actions.setVolume(Number(this.volume.value) / 100));
-    this.volume.addEventListener('change', () => actions.commitVolume());
-
-    this.root.append(
-      group,
-      el('div', 'settings__group', this.sound, this.music),
-      el('div', 'settings__volume-row', this.volumeLabel, this.volume),
-    );
-  }
-
-  update(translator: Translator, audio: AudioSettings): void {
-    const { t } = translator;
-    this.label.textContent = t('settings.language');
-    for (const [locale, b] of this.languages) {
-      b.textContent = t(`language.${locale}`);
-      b.setAttribute('aria-pressed', String(locale === translator.locale));
-    }
-    this.sound.textContent = t(audio.muted ? 'sound.off' : 'sound.on');
-    this.sound.setAttribute('aria-pressed', String(!audio.muted));
-    this.music.textContent = t(audio.music ? 'music.on' : 'music.off');
-    this.music.setAttribute('aria-pressed', String(audio.music));
-    this.volumeLabel.textContent = t('settings.volume');
-    // Do not fight the thumb while it is being dragged.
-    if (document.activeElement !== this.volume)
-      this.volume.value = String(Math.round(audio.volume * 100));
-  }
-}
-
 /**
- * A modal panel over the canvas: title, optional text, a few buttons and optional extras.
- * The first button that has a label is the primary action (and gets the focus); a button
- * without a label is hidden, so one overlay can offer different choices at different times.
+ * A modal panel over the canvas: title, optional text, a few buttons and optional extras, in the
+ * order they were added. The first button that has a label is the primary action (and gets the
+ * focus) unless the overlay says otherwise; a button without a label is hidden, so one overlay can
+ * offer different choices at different times.
  */
 class Overlay {
   readonly root = el('div', 'overlay');
+  /** Where the focus goes when the screen opens, if not on the primary button. */
+  initialFocus: (() => HTMLElement | undefined) | undefined;
   private readonly heading = el('h2', 'overlay__title');
   private readonly body = el('p', 'overlay__text');
   private readonly buttons: HTMLButtonElement[] = [];
+  private readonly labels: HTMLElement[] = [];
 
-  constructor(name: string, id: string) {
+  constructor(
+    name: string,
+    id: string,
+    private readonly hasPrimary = true,
+  ) {
     this.root.dataset['overlay'] = name;
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-modal', 'true');
@@ -157,13 +101,26 @@ class Overlay {
     this.root.append(this.heading, this.body);
   }
 
-  addButton(onClick: () => void): void {
-    const b = button('control', onClick);
-    this.buttons.push(b);
-    this.root.append(b);
+  /** A big picture above the title, for the screens that are not part of a round. */
+  setBadge(name: IconName): void {
+    this.root.prepend(el('div', 'overlay__badge', icon(name)));
   }
 
-  /** Extra content (language/sound, level picker) goes after the buttons. */
+  addButton(onClick: () => void, iconName?: IconName, extraClass = ''): HTMLButtonElement {
+    const b = button(`control ${extraClass}`.trim(), onClick);
+    this.buttons.push(b);
+    if (iconName === undefined) {
+      this.labels.push(b);
+    } else {
+      const label = el('span', 'control__label');
+      this.labels.push(label);
+      b.append(icon(iconName), label);
+    }
+    this.root.append(b);
+    return b;
+  }
+
+  /** Extra content (dock, level picker, switches) goes where it is added among the buttons. */
   addExtra(node: Node): void {
     this.root.append(node);
   }
@@ -172,19 +129,29 @@ class Overlay {
     this.heading.textContent = title;
     this.body.textContent = text;
     this.body.hidden = text === '';
-    const primary = labels.findIndex((label) => label !== undefined);
+    const primary = this.hasPrimary ? labels.findIndex((label) => label !== undefined) : -1;
     this.buttons.forEach((b, index) => {
       const label = labels[index];
       b.hidden = label === undefined;
-      if (label !== undefined) b.textContent = label;
+      const target = this.labels[index];
+      if (label !== undefined && target !== undefined) target.textContent = label;
       b.classList.toggle('control--primary', index === primary);
     });
   }
 
   focusPrimary(): void {
-    this.buttons
-      .find((b) => b.classList.contains('control--primary'))
-      ?.focus({ preventScroll: true });
+    const target =
+      this.initialFocus?.() ?? this.buttons.find((b) => b.classList.contains('control--primary'));
+    target?.focus({ preventScroll: true });
+  }
+}
+
+/** A row of icon buttons with captions, like the bottom bar of a mobile game. */
+class Dock {
+  readonly root = el('div', 'dock');
+
+  constructor(readonly tiles: readonly Tile[]) {
+    this.root.append(...tiles.map((t) => t.root));
   }
 }
 
@@ -268,6 +235,7 @@ export class GameView {
   private translator: Translator | undefined;
   private audio: AudioSettings = { muted: false, music: true, volume: 1 };
   private screen: Screen = 'menu';
+  private origin: SettingsOrigin = 'menu';
   private hasShownScreen = false;
   private outcome: RoundOutcome | undefined;
   private campaign: CampaignView | undefined;
@@ -298,7 +266,14 @@ export class GameView {
   private readonly targets: TargetList;
   private readonly paused: Overlay;
   private readonly ended: Overlay;
-  private readonly settings: readonly SettingsPanel[];
+  private readonly audioScreen: Overlay;
+  private readonly languageScreen: Overlay;
+  private readonly audioPanel: AudioPanel;
+  private readonly languagePanel: LanguagePanel;
+  private readonly menuDock: Dock;
+  private readonly pausedDock: Dock;
+  private readonly menuTiles: Readonly<Record<'shop' | 'audio' | 'language', Tile>>;
+  private readonly pausedTiles: Readonly<Record<'audio' | 'language', Tile>>;
   private readonly levelPicker: LevelPicker;
 
   constructor(root: HTMLElement, actions: ViewActions, icons: ViewIcons) {
@@ -319,38 +294,66 @@ export class GameView {
     this.canvas.tabIndex = 0;
     this.canvas.setAttribute('role', 'img');
 
-    const menuSettings = new SettingsPanel('menu', actions);
-    const pausedSettings = new SettingsPanel('paused', actions);
-    this.settings = [menuSettings, pausedSettings];
+    this.audioPanel = new AudioPanel(actions);
+    this.languagePanel = new LanguagePanel(actions.setLocale);
+    this.menuTiles = {
+      shop: tile('cart', 'shop', actions.openShop),
+      audio: tile('speaker', 'audio', actions.openAudio),
+      language: tile('globe', 'language', actions.openLanguage),
+    };
+    this.pausedTiles = {
+      audio: tile('speaker', 'audio', actions.openAudio),
+      language: tile('globe', 'language', actions.openLanguage),
+    };
+    this.menuDock = new Dock(Object.values(this.menuTiles));
+    this.pausedDock = new Dock(Object.values(this.pausedTiles));
 
     this.levelPicker = new LevelPicker(actions.selectLevel);
     this.menu = new Overlay('menu', 'game-menu');
     this.nameField = new NameField(actions.typePlayerName, actions.commitPlayerName);
-    this.menu.addButton(actions.play);
-    this.menu.addButton(actions.openShop);
+    // The big actions come first, so they are on screen even on a small phone; the name last.
+    this.menu.addButton(actions.play, 'play');
+    this.menu.addExtra(this.menuDock.root);
     this.menu.addExtra(this.levelPicker.root);
     this.menu.addExtra(this.nameField.root);
-    this.menu.addExtra(menuSettings.root);
     this.shopList = new ShopList((id) => icons.skin(id), {
       buy: actions.buySkin,
       equip: actions.equipSkin,
     });
-    this.shop = new Overlay('shop', 'game-shop');
-    this.shop.addButton(actions.closeShop);
+    this.shop = new Overlay('shop', 'game-shop', false);
+    this.shop.setBadge('cart');
+    // Back is at the top, where it is found without scrolling the list of skins.
+    const shopBack = this.shop.addButton(actions.closeShop, 'back', 'control--back');
+    this.shop.initialFocus = () => shopBack;
     this.shop.addExtra(this.shopList.root);
     this.targets = new TargetList(icons);
     this.briefing = new Overlay('briefing', 'game-briefing');
     this.briefing.addExtra(this.targets.root);
-    this.briefing.addButton(actions.start);
+    this.briefing.addButton(actions.start, 'play');
     this.briefing.addButton(actions.toMenu);
     this.paused = new Overlay('paused', 'game-paused');
-    this.paused.addButton(actions.resume);
+    this.paused.addButton(actions.resume, 'play');
+    this.paused.addExtra(this.pausedDock.root);
     this.paused.addButton(actions.toMenu);
-    this.paused.addExtra(pausedSettings.root);
     this.ended = new Overlay('ended', 'game-ended');
     this.ended.addButton(actions.next);
     this.ended.addButton(actions.retry);
     this.ended.addButton(actions.toMenu);
+
+    // Audio and language: a screen each, with a thumb-sized Back at the bottom.
+    this.audioScreen = new Overlay('audio', 'game-audio', false);
+    this.audioScreen.setBadge('speaker');
+    this.audioScreen.addExtra(this.audioPanel.root);
+    this.audioScreen.addButton(actions.closeSettings, 'back', 'control--back');
+    this.audioScreen.initialFocus = () => this.audioPanel.firstControl;
+    this.languageScreen = new Overlay('language', 'game-language', false);
+    this.languageScreen.setBadge('globe');
+    this.languageScreen.addExtra(this.languagePanel.root);
+    this.languageScreen.addButton(actions.closeSettings, 'back', 'control--back');
+    this.languageScreen.initialFocus = () =>
+      this.translator === undefined
+        ? undefined
+        : this.languagePanel.firstControl(this.translator.locale);
 
     this.stage.append(
       this.canvas,
@@ -359,6 +362,8 @@ export class GameView {
       this.briefing.root,
       this.paused.root,
       this.ended.root,
+      this.audioScreen.root,
+      this.languageScreen.root,
     );
     this.live.setAttribute('role', 'status');
     this.live.setAttribute('aria-live', 'polite');
@@ -375,11 +380,11 @@ export class GameView {
     new ResizeObserver(listener).observe(this.hud);
   }
 
-  /** Shows the current audio settings (sound, music, volume) in the settings panels. */
+  /** Shows the current audio settings (sound, music, volume) on the audio screen. */
   setAudio(audio: AudioSettings): void {
     this.audio = audio;
     if (this.translator === undefined) return;
-    for (const panel of this.settings) panel.update(this.translator, audio);
+    this.audioPanel.update(this.translator, audio);
   }
 
   /** (Re)writes every static text. Call it whenever the language changes. */
@@ -391,7 +396,13 @@ export class GameView {
     document.documentElement.lang = translator.locale;
     document.title = t('game.title');
     this.title.textContent = t('game.title');
-    for (const panel of this.settings) panel.update(translator, this.audio);
+    this.audioPanel.update(translator, this.audio);
+    this.languagePanel.update(translator);
+    this.menuTiles.shop.setCaption(t('menu.shop'));
+    this.menuTiles.audio.setCaption(t('menu.audio'));
+    this.menuTiles.language.setCaption(t('settings.language'));
+    this.pausedTiles.audio.setCaption(t('menu.audio'));
+    this.pausedTiles.language.setCaption(t('settings.language'));
     this.pauseButton.setAttribute('aria-label', t('pause.button'));
     this.hud.setAttribute('aria-label', t('game.title'));
     this.hudScore.label.textContent = t('hud.score');
@@ -399,7 +410,9 @@ export class GameView {
     this.hudCombo.label.textContent = t('hud.combo');
     this.help.textContent = t('controls.help');
 
-    this.menu.setTexts(t('game.title'), t('game.tagline'), [t('menu.play'), t('menu.shop')]);
+    this.menu.setTexts(t('game.title'), t('game.tagline'), [t('menu.play')]);
+    this.audioScreen.setTexts(t('audio.title'), '', [t('settings.back')]);
+    this.languageScreen.setTexts(t('language.title'), '', [t('settings.back')]);
     this.nameField.update(translator, this.playerName);
     this.renderShop();
     this.paused.setTexts(t('pause.title'), '', [t('pause.resume'), t('round.menu')]);
@@ -408,15 +421,21 @@ export class GameView {
     this.renderScreen();
   }
 
-  showScreen(screen: Screen, outcome: RoundOutcome | undefined, campaign: CampaignView): void {
+  showScreen(
+    screen: Screen,
+    outcome: RoundOutcome | undefined,
+    campaign: CampaignView,
+    settingsOrigin: SettingsOrigin = 'menu',
+  ): void {
     const previous = this.screen;
     this.screen = screen;
+    this.origin = settingsOrigin;
     this.outcome = outcome;
     this.campaign = campaign;
     this.renderCampaign();
     this.renderEnded();
     this.renderScreen();
-    if (previous !== screen || !this.hasShownScreen) this.moveFocus();
+    if (previous !== screen || !this.hasShownScreen) this.moveFocus(previous);
     this.hasShownScreen = true;
   }
 
@@ -550,6 +569,8 @@ export class GameView {
     const overlays: Readonly<Record<OverlayScreen, Overlay>> = {
       menu: this.menu,
       shop: this.shop,
+      audio: this.audioScreen,
+      language: this.languageScreen,
       briefing: this.briefing,
       paused: this.paused,
       ended: this.ended,
@@ -557,16 +578,36 @@ export class GameView {
     for (const [name, overlay] of Object.entries(overlays) as [OverlayScreen, Overlay][]) {
       overlay.root.hidden = this.screen !== name;
     }
-    const inRound = this.screen === 'playing' || this.screen === 'paused';
+    const inSettings = this.screen === 'audio' || this.screen === 'language';
+    // The pause screen's own audio and language screens still belong to the round.
+    const inRound =
+      this.screen === 'playing' ||
+      this.screen === 'paused' ||
+      (inSettings && this.origin === 'paused');
     // `visibility`, not `hidden`: the HUD keeps its space, so the canvas scale never jumps between
     // screens; it also removes the HUD from the accessibility tree while it is invisible.
-    this.hud.style.visibility = this.screen === 'menu' || this.screen === 'shop' ? 'hidden' : '';
+    this.hud.style.visibility =
+      inRound || this.screen === 'briefing' || this.screen === 'ended' ? '' : 'hidden';
     this.pauseButton.style.visibility = inRound ? '' : 'hidden';
     this.pauseButton.disabled = this.screen !== 'playing';
     this.stage.dataset['screen'] = this.screen;
   }
 
-  private moveFocus(): void {
+  /** After coming back from the shop, audio or language, the focus returns to the button that opened it. */
+  private returnFocusTarget(previous: Screen): HTMLElement | undefined {
+    const tiles = this.screen === 'paused' ? this.pausedTiles : this.menuTiles;
+    if (previous === 'audio') return tiles.audio.root;
+    if (previous === 'language') return tiles.language.root;
+    if (previous === 'shop' && this.screen === 'menu') return this.menuTiles.shop.root;
+    return undefined;
+  }
+
+  private moveFocus(previous: Screen): void {
+    const back = this.returnFocusTarget(previous);
+    if ((this.screen === 'menu' || this.screen === 'paused') && back !== undefined) {
+      back.focus({ preventScroll: true });
+      return;
+    }
     switch (this.screen) {
       case 'playing':
         this.canvas.focus({ preventScroll: true });
@@ -576,6 +617,12 @@ export class GameView {
         break;
       case 'shop':
         this.shop.focusPrimary();
+        break;
+      case 'audio':
+        this.audioScreen.focusPrimary();
+        break;
+      case 'language':
+        this.languageScreen.focusPrimary();
         break;
       case 'briefing':
         this.briefing.focusPrimary();

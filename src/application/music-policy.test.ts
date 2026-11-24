@@ -11,10 +11,20 @@ describe('musicFor', () => {
     expect(musicFor(screen, 'rocks')).toBeUndefined();
   });
 
+  it.each(['audio', 'language'] as const)(
+    'on %s sounds like the screen it was opened from',
+    (screen) => {
+      expect(musicFor(screen, 'rocks', 'menu')).toBe('rocks');
+      expect(musicFor(screen, 'rocks', 'paused')).toBeUndefined();
+    },
+  );
+
   it('covers every screen', () => {
     const screens: Record<Screen, true> = {
       menu: true,
       shop: true,
+      audio: true,
+      language: true,
       briefing: true,
       playing: true,
       paused: true,

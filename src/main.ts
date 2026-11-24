@@ -117,6 +117,9 @@ const view = new GameView(
     },
     selectLevel: (index) => flow.select(index),
     openShop: () => flow.openShop(),
+    openAudio: () => flow.openAudio(),
+    openLanguage: () => flow.openLanguage(),
+    closeSettings: () => flow.closeSettings(),
     closeShop: () => flow.closeShop(),
     buySkin: (skinId) => {
       if (profile.buy(skinId) === undefined) {
@@ -146,7 +149,10 @@ const view = new GameView(
     toggleSound: () => profile.setMuted(!profile.data.settings.muted),
     toggleMusic: () => profile.setMusic(!profile.data.settings.music),
     setVolume: (volume) => profile.setVolume(volume),
-    commitVolume: () => profile.flush(),
+    commitVolume: () => {
+      profile.flush();
+      sfx.play({ id: 'click', semitones: 0 }); // lets the player hear the volume just chosen
+    },
   },
   icons,
 );
@@ -206,7 +212,7 @@ function applyAudio(): void {
 /** The music follows the screen and the level's biome; it never plays in a hidden tab. */
 function applyMusic(): void {
   const biome = LEVELS[flow.levelIndex]?.biome ?? 'beach';
-  music.setTrack(document.hidden ? undefined : musicFor(flow.screen, biome));
+  music.setTrack(document.hidden ? undefined : musicFor(flow.screen, biome, flow.settingsOrigin));
 }
 
 profile.onChange(() => {
@@ -221,7 +227,7 @@ flow.onRoundEnd((outcome) => profile.recordRound(outcome.score, flow.progress));
 flow.onChange(() => {
   applyMusic();
   hudKey = ''; // another level changes the goal and the level number, not just the score
-  view.showScreen(flow.screen, flow.outcome, campaignView());
+  view.showScreen(flow.screen, flow.outcome, campaignView(), flow.settingsOrigin);
   refit();
 });
 
