@@ -10,10 +10,11 @@ test.describe('menu', () => {
     await expect(game.primaryButton()).toHaveText('Play');
   });
 
-  test('has a bottom bar with the shop, the audio and the language, each with a caption', async ({
+  test('has a bottom bar with the shop, the achievements, the audio and the language, each with a caption', async ({
     game,
   }) => {
     await expect(game.tile('shop')).toHaveAccessibleName('Shop');
+    await expect(game.tile('achievements')).toHaveAccessibleName('Achievements');
     await expect(game.tile('audio')).toHaveAccessibleName('Audio');
     await expect(game.tile('language')).toHaveAccessibleName('Language');
   });

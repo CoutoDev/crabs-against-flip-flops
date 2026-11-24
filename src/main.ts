@@ -3,9 +3,11 @@ import { EventBus } from './application/event-bus';
 import { musicFor } from './application/music-policy';
 import { RepaintGate } from './application/repaint-gate';
 import { Profile } from './application/profile';
+import { RoundTally } from './application/round-stats';
 import { GameFlow } from './application/game-flow';
 import { PlayerControls } from './application/player-controls';
 import { CRAB_TYPES } from './data/crab-types';
+import { ACHIEVEMENTS } from './data/achievements';
 import { POINTS_PER_COIN, REPLAY_BANK_PERCENT } from './data/economy';
 import { LEVELS } from './data/levels';
 import { DEFAULT_SKIN_ID, SKINS } from './data/skins';
@@ -30,6 +32,7 @@ import {
 import { spriteToCanvas } from './infrastructure/render/sprite-canvas';
 import { SPRITES } from './infrastructure/render/sprites';
 import { announcementFor } from './ui/announce';
+import { achievementName, type RewardView } from './ui/achievements-view';
 import { GameView, type CampaignView, type ViewIcons } from './ui/game-view';
 import { buildHud } from './ui/hud-model';
 import { detectLocale } from './ui/i18n/detect-locale';
@@ -50,10 +53,12 @@ const profile = new Profile(
     levelIds: LEVELS.map((level) => level.id),
     goalByLevel: Object.fromEntries(LEVELS.map((level) => [level.id, level.targetScore])),
     skinIds: SKINS.map((skin) => skin.id),
+    achievementIds: ACHIEVEMENTS.map((achievement) => achievement.id),
     defaultSkin: DEFAULT_SKIN_ID,
   },
   SKINS,
   { pointsPerCoin: POINTS_PER_COIN, replayPercent: REPLAY_BANK_PERCENT },
+  { catalog: ACHIEVEMENTS, levels: LEVELS.map(({ id, biome }) => ({ id, biome })) },
   (run, ms) => {
     const id = setTimeout(run, ms);
     return () => clearTimeout(id);
@@ -67,6 +72,9 @@ const flow = new GameFlow({
   newSeed: () => Math.floor(Math.random() * 0x100000000),
   bus,
 });
+// Counts what each round's events add up to for the achievements; a new round starts from zero.
+const tally = new RoundTally(bus);
+flow.onRoundStart(() => tally.reset());
 const controls = new PlayerControls(flow);
 const sfx = new WebAudioSfx();
 const music = new WebAudioMusic(() => sfx.graph);
@@ -125,6 +133,8 @@ const view = new GameView(
     openLanguage: () => flow.openLanguage(),
     closeSettings: () => flow.closeSettings(),
     closeShop: () => flow.closeShop(),
+    openAchievements: () => flow.openAchievements(),
+    closeAchievements: () => flow.closeAchievements(),
     buySkin: (skinId) => {
       if (profile.buy(skinId) === undefined) {
         sfx.play({ id: 'buy', semitones: 0 });
@@ -212,11 +222,12 @@ function pushProfile(): void {
       pointsPerCoin: POINTS_PER_COIN,
       owned: ownedSkins,
       equipped: equippedSkin,
-      // Only what can be bought: M8 adds the locked rows for items earned by an achievement.
-      skins: SKINS.flatMap((skin) => {
-        const price = coinPrice(skin);
-        return price === undefined ? [] : [{ id: skin.id, price }];
-      }),
+      // Items earned by an achievement show as locked, with the achievement that gives them.
+      skins: SKINS.map((skin) => ({
+        id: skin.id,
+        price: coinPrice(skin),
+        earnedBy: 'achievement' in skin.acquire ? skin.acquire.achievement : undefined,
+      })),
     },
     playerName,
   );
@@ -240,24 +251,66 @@ function applyMusic(): void {
   music.setTrack(document.hidden ? undefined : musicFor(flow.screen, biome, flow.settingsOrigin));
 }
 
+let achievementsKey = '';
+
+/** The achievements screen follows the save: progress moves only when a round ends. */
+function pushAchievements(): void {
+  const { stats, clearedLevels, achievements } = profile.data;
+  const key = `${JSON.stringify(stats)}|${clearedLevels.join(',')}|${achievements.join(',')}`;
+  if (key === achievementsKey) return;
+  achievementsKey = key;
+  view.updateAchievements({
+    rows: profile.achievementProgress().map(({ id, earned, progress }) => ({
+      id,
+      earned,
+      current: progress.current,
+      goal: progress.goal,
+      reward: rewardOf(id),
+    })),
+  });
+}
+
+/** What an achievement pays: its coins, and the items whose `acquire` names it. */
+function rewardOf(achievementId: string): RewardView {
+  return {
+    coins: ACHIEVEMENTS.find((entry) => entry.id === achievementId)?.coins ?? 0,
+    items: SKINS.flatMap((skin) =>
+      'achievement' in skin.acquire && skin.acquire.achievement === achievementId ? [skin.id] : [],
+    ),
+  };
+}
+
 profile.onChange(() => {
   pushProfile();
+  pushAchievements();
   applyAudio();
 });
 pushProfile();
+pushAchievements();
 applyAudio();
 // The points of a round and the campaign progress are saved the moment the round ends. This runs
 // before the end dialog is shown, so the dialog can say how many points reached the bank.
 flow.onRoundEnd((outcome) => {
-  const credit = profile.recordRound(
+  const { credit, unlocked } = profile.recordRound(
     {
       levelId: LEVELS[outcome.levelIndex]?.id ?? 0,
       score: outcome.score,
       won: outcome.result === 'won',
+      hits: outcome.hits,
+      throws: outcome.throws,
+      ammoLeft: outcome.ammoLeft,
+      ...tally.stats,
     },
     flow.progress,
   );
-  view.setRoundCredit({ ...credit, replayPercent: REPLAY_BANK_PERCENT });
+  view.setRoundCredit({
+    ...credit,
+    replayPercent: REPLAY_BANK_PERCENT,
+    unlocked: unlocked.map(({ id, coins, items }) => ({ id, reward: { coins, items } })),
+  });
+  for (const { id } of unlocked) {
+    view.announce(translator.t('achievements.announce', { name: achievementName(translator, id) }));
+  }
 });
 
 flow.onChange(() => {

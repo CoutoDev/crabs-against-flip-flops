@@ -1,5 +1,5 @@
 /**
- * Something the shop can hold (D35). Today every item is a skin, a cosmetic for the flip flop
+ * Something the shop can hold (D38). Today every item is a skin, a cosmetic for the flip flop
  * (D15) that never changes how the game plays; the powers of M9 will be another kind. The domain
  * only knows how an item is obtained; its looks live in the renderer, keyed by `id`.
  */

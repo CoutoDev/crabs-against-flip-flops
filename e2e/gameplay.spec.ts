@@ -1,7 +1,10 @@
+import { ACHIEVEMENTS } from '../src/data/achievements';
 import { expect, test } from './support/fixtures';
 
 test('a bot that only looks at the pixels can play a whole round', async ({ game, page }) => {
   test.setTimeout(90_000);
+  // Every achievement already earned, so the last thing announced is the score milestone.
+  await game.seedSave({ version: 2, achievements: ACHIEVEMENTS.map((entry) => entry.id) });
   await game.play();
 
   const { throws, bestScore } = await game.playRoundWithBot();

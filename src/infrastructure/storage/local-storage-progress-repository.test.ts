@@ -10,6 +10,7 @@ const save = defaultSave({
   levelIds: [1],
   goalByLevel: { 1: 100 },
   skinIds: ['classic'],
+  achievementIds: [],
   defaultSkin: 'classic',
 });
 

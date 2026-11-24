@@ -429,6 +429,97 @@ describe('GameFlow', () => {
     });
   });
 
+  describe('achievements screen, round start and flip flops left', () => {
+    it('opens the achievements from the menu and closes them back to the menu', () => {
+      const { flow } = setup();
+      const listener = vi.fn();
+      flow.onChange(listener);
+      flow.openAchievements();
+      expect(flow.screen).toBe('achievements');
+      flow.closeAchievements();
+      expect(flow.screen).toBe('menu');
+      expect(listener).toHaveBeenCalledTimes(2);
+    });
+
+    it('opens the achievements only from the menu, and closes them only from there', () => {
+      const { flow } = setup();
+      begin(flow);
+      flow.openAchievements();
+      expect(flow.screen).toBe('playing');
+      flow.closeAchievements();
+      expect(flow.screen).toBe('playing');
+      flow.pause();
+      flow.openAchievements();
+      expect(flow.screen).toBe('paused');
+    });
+
+    it('is ignored from the shop and the settings screens', () => {
+      const { flow } = setup();
+      flow.openShop();
+      flow.openAchievements();
+      expect(flow.screen).toBe('shop');
+      flow.closeShop();
+      flow.openAudio();
+      flow.openAchievements();
+      expect(flow.screen).toBe('audio');
+    });
+
+    it('tells the round start listeners for a briefing, a retry and the next level', () => {
+      const { flow, bus } = setup();
+      const listener = vi.fn();
+      flow.onRoundStart(listener);
+      flow.play();
+      expect(listener).toHaveBeenCalledTimes(1);
+      flow.start();
+      bus.publish({ type: 'LevelCleared', score: 100, ammoLeft: 0 });
+      flow.next();
+      expect(listener).toHaveBeenCalledTimes(2);
+      flow.start();
+      bus.publish({ type: 'RoundLost', score: 0 });
+      flow.retry();
+      expect(listener).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not tell the round start listeners about pausing, the menu or the shop', () => {
+      const { flow } = setup();
+      const listener = vi.fn();
+      begin(flow);
+      flow.onRoundStart(listener);
+      flow.pause();
+      flow.resume();
+      flow.toMenu();
+      flow.openShop();
+      flow.closeShop();
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('tells the round start listeners before the round exists for the player to act on', () => {
+      const { flow } = setup();
+      let screen = '';
+      flow.onRoundStart(() => (screen = flow.screen));
+      flow.play();
+      expect(screen).toBe('menu'); // the screen changes after: nothing of the round has happened
+      expect(flow.session).toBeDefined();
+    });
+
+    it('stops telling a round start listener after it unsubscribes', () => {
+      const { flow } = setup();
+      const listener = vi.fn();
+      flow.onRoundStart(listener)();
+      flow.play();
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('reports the flip flops left, counted from the round and not from the event', () => {
+      const { flow, bus } = setup({ ammo: 5, targetScore: 50 });
+      begin(flow);
+      flow.session?.throwAt({ x: 10, y: 10 });
+      flow.session?.throwAt({ x: 20, y: 10 });
+      bus.publish({ type: 'LevelCleared', score: 100, ammoLeft: 99 });
+      expect(flow.outcome?.ammoLeft).toBe(3);
+    });
+  });
+
   describe('audio and language screens', () => {
     it.each(['openAudio', 'openLanguage'] as const)(
       '%s opens from the menu and Back returns to it',

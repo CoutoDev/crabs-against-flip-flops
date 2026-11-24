@@ -1,5 +1,40 @@
+import { CRAB_TYPE_IDS, type CrabType } from '../domain/entities/crab';
 import { isLocale, type Locale } from './locale';
 import { sanitizePlayerName } from './player-name';
+
+/**
+ * Lifetime counters that the achievements read (ADR 10.3). They start at zero for a save made
+ * before achievements existed: only what is played from then on is counted.
+ */
+export interface PlayerStats {
+  readonly rounds: number;
+  readonly wins: number;
+  readonly throws: number;
+  readonly hits: number;
+  /** The longest run of consecutive hits in any round. */
+  readonly bestCombo: number;
+  /** Rounds won without a single missed throw. */
+  readonly flawlessWins: number;
+  /** The most flip flops left over at the end of a won round. */
+  readonly bestAmmoLeftOnWin: number;
+  /** Full round points, before the replay cut of the point bank (D12). */
+  readonly totalPoints: number;
+  readonly hitsByType: Readonly<Record<CrabType, number>>;
+}
+
+export function emptyStats(): PlayerStats {
+  return {
+    rounds: 0,
+    wins: 0,
+    throws: 0,
+    hits: 0,
+    bestCombo: 0,
+    flawlessWins: 0,
+    bestAmmoLeftOnWin: 0,
+    totalPoints: 0,
+    hitsByType: { common: 0, swimmer: 0, fiddler: 0 },
+  };
+}
 
 /**
  * What is persisted (ADR section 5). Reading is always defensive: the storage is user-editable, so
@@ -9,7 +44,7 @@ export interface SaveData {
   readonly version: 2;
   /** Empty until the player picks one. */
   readonly playerName: string;
-  /** The point bank: what rounds earned and the player has not converted yet (D35). */
+  /** The point bank: what rounds earned and the player has not converted yet (D38). */
   readonly points: number;
   /** What the shop charges, got by converting points. */
   readonly coins: number;
@@ -20,6 +55,9 @@ export interface SaveData {
   readonly bestScoreByLevel: Readonly<Record<number, number>>;
   readonly ownedSkins: readonly string[];
   readonly equippedSkin: string;
+  readonly stats: PlayerStats;
+  /** Ids of the achievements already earned, in the order of the catalog. */
+  readonly achievements: readonly string[];
   readonly settings: {
     /** Silences everything (sound effects and music). */
     readonly muted: boolean;
@@ -38,6 +76,7 @@ export interface SaveRules {
   /** Score that wins each level; used to tell which levels a version 1 save had already won. */
   readonly goalByLevel: Readonly<Record<number, number>>;
   readonly skinIds: readonly string[];
+  readonly achievementIds: readonly string[];
   /** Free skin everyone owns and wears at first. */
   readonly defaultSkin: string;
 }
@@ -55,6 +94,8 @@ export function defaultSave(rules: SaveRules): SaveData {
     bestScoreByLevel: {},
     ownedSkins: [rules.defaultSkin],
     equippedSkin: rules.defaultSkin,
+    stats: emptyStats(),
+    achievements: [],
     settings: { muted: false, music: true, volume: 1, locale: null },
   };
 }
@@ -64,6 +105,35 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isCount = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_NUMBER;
+
+/** Keeps the ids that still exist in the catalog, once each, in catalog order. */
+function parseAchievements(raw: unknown, known: readonly string[]): readonly string[] {
+  if (!Array.isArray(raw)) return [];
+  return known.filter((id) => raw.includes(id));
+}
+
+function parseStats(raw: unknown): PlayerStats {
+  const stats = emptyStats();
+  if (!isRecord(raw)) return stats;
+  const count = (key: string): number => (isCount(raw[key]) ? raw[key] : 0);
+  const byTypeRaw = isRecord(raw['hitsByType']) ? raw['hitsByType'] : {};
+  const hitsByType = { ...stats.hitsByType };
+  for (const type of CRAB_TYPE_IDS) {
+    const value = byTypeRaw[type];
+    hitsByType[type] = isCount(value) ? value : 0;
+  }
+  return {
+    rounds: count('rounds'),
+    wins: count('wins'),
+    throws: count('throws'),
+    hits: count('hits'),
+    bestCombo: count('bestCombo'),
+    flawlessWins: count('flawlessWins'),
+    bestAmmoLeftOnWin: count('bestAmmoLeftOnWin'),
+    totalPoints: count('totalPoints'),
+    hitsByType,
+  };
+}
 
 /**
  * Turns whatever was stored into a valid save of the current version. An unknown version or
@@ -133,6 +203,8 @@ export function parseSave(raw: unknown, rules: SaveRules): SaveData {
     bestScoreByLevel,
     ownedSkins: [...owned],
     equippedSkin,
+    stats: parseStats(raw['stats']),
+    achievements: parseAchievements(raw['achievements'], rules.achievementIds),
     settings: {
       muted: settingsRaw['muted'] === true,
       music: settingsRaw['music'] !== false,

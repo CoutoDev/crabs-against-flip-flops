@@ -1,19 +1,41 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ItemCatalog } from '../domain/entities/item';
-import { Profile, SAVE_DELAY_MS, type EconomyRules, type Later } from './profile';
+import {
+  Profile,
+  SAVE_DELAY_MS,
+  type AchievementRules,
+  type EconomyRules,
+  type Later,
+  type RoundRecord,
+} from './profile';
 import type { ProgressRepository } from './ports/progress-repository';
 import type { SaveData, SaveRules } from './save-data';
 
 const RULES: SaveRules = {
   levelIds: [1, 2, 3],
   goalByLevel: { 1: 100, 2: 120, 3: 150 },
-  skinIds: ['classic', 'ocean'],
+  skinIds: ['classic', 'ocean', 'ember'],
+  achievementIds: ['first-hit', 'combo-4', 'flawless-win', 'clear-beach'],
   defaultSkin: 'classic',
 };
 const CATALOG: ItemCatalog = [
   { id: 'classic', kind: 'skin', acquire: { coins: 0 } },
   { id: 'ocean', kind: 'skin', acquire: { coins: 40 } },
+  { id: 'ember', kind: 'skin', acquire: { achievement: 'flawless-win' } },
 ];
+const ACHIEVEMENTS: AchievementRules = {
+  catalog: [
+    { id: 'first-hit', condition: { kind: 'hits', atLeast: 1 }, coins: 5 },
+    { id: 'combo-4', condition: { kind: 'combo', atLeast: 4 }, coins: 10 },
+    { id: 'flawless-win', condition: { kind: 'flawlessWin' } },
+    { id: 'clear-beach', condition: { kind: 'biomeCleared', biome: 'beach' }, coins: 12 },
+  ],
+  levels: [
+    { id: 1, biome: 'beach' },
+    { id: 2, biome: 'beach' },
+    { id: 3, biome: 'rocks' },
+  ],
+};
 const ECONOMY: EconomyRules = { pointsPerCoin: 5, replayPercent: 50 };
 const NO_PROGRESS = { highestUnlockedLevel: 1, bestScoreByLevel: {} };
 
@@ -25,7 +47,7 @@ function memoryRepo(stored?: unknown) {
 
 const make = (stored?: unknown) => {
   const { repo, saved } = memoryRepo(stored);
-  return { profile: new Profile(repo, RULES, CATALOG, ECONOMY), saved };
+  return { profile: new Profile(repo, RULES, CATALOG, ECONOMY, ACHIEVEMENTS), saved };
 };
 
 describe('Profile', () => {
@@ -49,14 +71,31 @@ describe('Profile', () => {
     expect(saved).toEqual([]); // migrating in memory does not write until something changes
   });
 
-  describe('recordRound (D12, D35)', () => {
-    const round = (levelId: number, score: number, won: boolean) => ({ levelId, score, won });
+  describe('recordRound (D12, D38)', () => {
+    /** A round with no hits (so no achievement is earned by accident) unless `extra` says so. */
+    const round = (
+      levelId: number,
+      score: number,
+      won: boolean,
+      extra: Partial<RoundRecord> = {},
+    ): RoundRecord => ({
+      levelId,
+      score,
+      won,
+      hits: 0,
+      throws: 0,
+      misses: 0,
+      bestCombo: 0,
+      hitsByType: { common: 0, swimmer: 0, fiddler: 0 },
+      ammoLeft: 0,
+      ...extra,
+    });
 
     it('credits every point to the bank the first time, also after a loss', () => {
       const { profile, saved } = make();
-      const lost = profile.recordRound(round(1, 60, false), NO_PROGRESS);
+      const lost = profile.recordRound(round(1, 60, false), NO_PROGRESS).credit;
       expect(lost).toEqual({ points: 60, reduced: false });
-      const lostAgain = profile.recordRound(round(1, 30, false), NO_PROGRESS);
+      const lostAgain = profile.recordRound(round(1, 30, false), NO_PROGRESS).credit;
       expect(lostAgain).toEqual({ points: 30, reduced: false }); // still not cleared
       expect(profile.data.points).toBe(90);
       expect(saved).toHaveLength(2);
@@ -65,7 +104,7 @@ describe('Profile', () => {
     it('credits the first win in full, and marks the level as cleared', () => {
       const { profile } = make();
       // The flow has already moved the frontier by the time the round-end listener runs.
-      const credit = profile.recordRound(round(1, 120, true), {
+      const { credit } = profile.recordRound(round(1, 120, true), {
         highestUnlockedLevel: 2,
         bestScoreByLevel: { 1: 120 },
       });
@@ -76,11 +115,11 @@ describe('Profile', () => {
 
     it('credits half of any round on a level that was cleared before, win or lose', () => {
       const { profile } = make({ version: 2, clearedLevels: [1], highestUnlockedLevel: 2 });
-      expect(profile.recordRound(round(1, 121, true), NO_PROGRESS)).toEqual({
+      expect(profile.recordRound(round(1, 121, true), NO_PROGRESS).credit).toEqual({
         points: 60,
         reduced: true,
       });
-      expect(profile.recordRound(round(1, 40, false), NO_PROGRESS)).toEqual({
+      expect(profile.recordRound(round(1, 40, false), NO_PROGRESS).credit).toEqual({
         points: 20,
         reduced: true,
       });
@@ -90,14 +129,14 @@ describe('Profile', () => {
 
     it('treats another level on its own: only the cleared one is reduced', () => {
       const { profile } = make({ version: 2, clearedLevels: [1], highestUnlockedLevel: 2 });
-      expect(profile.recordRound(round(2, 50, false), NO_PROGRESS).reduced).toBe(false);
+      expect(profile.recordRound(round(2, 50, false), NO_PROGRESS).credit.reduced).toBe(false);
     });
 
     it('winning the last level, which never moves the frontier, still clears it', () => {
       const { profile } = make({ version: 2, highestUnlockedLevel: 3 });
       profile.recordRound(round(3, 150, true), { highestUnlockedLevel: 3, bestScoreByLevel: {} });
       expect(profile.data.clearedLevels).toEqual([3]);
-      expect(profile.recordRound(round(3, 100, true), NO_PROGRESS).points).toBe(50);
+      expect(profile.recordRound(round(3, 100, true), NO_PROGRESS).credit.points).toBe(50);
     });
 
     it('a version 1 save that had won level 1 already pays the reduced rate on it', () => {
@@ -106,7 +145,7 @@ describe('Profile', () => {
         highestUnlockedLevel: 2,
         bestScoreByLevel: { 1: 130 },
       });
-      expect(profile.recordRound(round(1, 100, true), NO_PROGRESS).points).toBe(50);
+      expect(profile.recordRound(round(1, 100, true), NO_PROGRESS).credit.points).toBe(50);
     });
 
     it('keeps the full score as the record: only the bank is reduced', () => {
@@ -138,6 +177,168 @@ describe('Profile', () => {
       profile.recordRound(round(1, -50, false), NO_PROGRESS);
       profile.recordRound(round(1, 10.9, false), NO_PROGRESS);
       expect(profile.data.points).toBe(10);
+    });
+  });
+
+  describe('achievements (D36)', () => {
+    const play = (
+      levelId: number,
+      won: boolean,
+      extra: Partial<RoundRecord> = {},
+    ): RoundRecord => ({
+      levelId,
+      score: 50,
+      won,
+      hits: 5,
+      throws: 8,
+      misses: 3,
+      bestCombo: 2,
+      hitsByType: { common: 5, swimmer: 0, fiddler: 0 },
+      ammoLeft: 1,
+      ...extra,
+    });
+
+    it('adds the round to the lifetime counters', () => {
+      const { profile } = make();
+      profile.recordRound(play(1, true, { score: 80, bestCombo: 3 }), NO_PROGRESS);
+      profile.recordRound(
+        play(1, false, {
+          score: 40,
+          bestCombo: 2,
+          hits: 2,
+          throws: 4,
+          hitsByType: { common: 0, swimmer: 1, fiddler: 1 },
+        }),
+        NO_PROGRESS,
+      );
+      expect(profile.data.stats).toEqual({
+        rounds: 2,
+        wins: 1,
+        throws: 12,
+        hits: 7,
+        bestCombo: 3,
+        flawlessWins: 0,
+        bestAmmoLeftOnWin: 1,
+        totalPoints: 120,
+        hitsByType: { common: 5, swimmer: 1, fiddler: 1 },
+      });
+    });
+
+    it('counts the full score as total points, not what the replay rule sent to the bank', () => {
+      const { profile } = make({ version: 2, clearedLevels: [1] });
+      profile.recordRound(play(1, true, { score: 200 }), NO_PROGRESS);
+      expect(profile.data.points).toBe(100);
+      expect(profile.data.stats.totalPoints).toBe(200);
+    });
+
+    it('keeps counters whole and never lets a bad number lower them', () => {
+      const { profile } = make();
+      profile.recordRound(play(1, false, { score: -50, hits: -3, throws: 2.9 }), NO_PROGRESS);
+      expect(profile.data.stats).toMatchObject({ totalPoints: 0, hits: 0, throws: 2 });
+    });
+
+    it('earns an achievement, pays its coins and tells which one', () => {
+      const { profile } = make();
+      const { unlocked } = profile.recordRound(play(1, false, { bestCombo: 1 }), NO_PROGRESS);
+      expect(unlocked).toEqual([{ id: 'first-hit', coins: 5, items: [] }]);
+      expect(profile.data.coins).toBe(5);
+      expect(profile.data.achievements).toEqual(['first-hit']);
+    });
+
+    it('earns several at once, in catalog order, and pays all of them', () => {
+      const { profile } = make();
+      const { unlocked } = profile.recordRound(play(1, false, { bestCombo: 4 }), NO_PROGRESS);
+      expect(unlocked.map((unlock) => unlock.id)).toEqual(['first-hit', 'combo-4']);
+      expect(profile.data.coins).toBe(15);
+    });
+
+    it('pays only once: playing on never earns the same achievement again', () => {
+      const { profile } = make();
+      profile.recordRound(play(1, false), NO_PROGRESS);
+      const again = profile.recordRound(play(1, false), NO_PROGRESS);
+      expect(again.unlocked).toEqual([]);
+      expect(profile.data.coins).toBe(5);
+    });
+
+    it('saves once per round, with the round, the coins and the achievements together', () => {
+      const { profile, saved } = make();
+      profile.recordRound(play(1, false), NO_PROGRESS);
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ coins: 5, achievements: ['first-hit'] });
+      expect(saved[0]?.stats.rounds).toBe(1);
+    });
+
+    it('a win without a missed throw unlocks the exclusive skin and it is owned at once', () => {
+      const { profile } = make();
+      const { unlocked } = profile.recordRound(
+        play(1, true, { misses: 0, hits: 6, throws: 6 }),
+        NO_PROGRESS,
+      );
+      expect(unlocked.find((unlock) => unlock.id === 'flawless-win')).toEqual({
+        id: 'flawless-win',
+        coins: 0,
+        items: ['ember'],
+      });
+      expect(profile.data.ownedSkins).toContain('ember');
+      expect(profile.equip('ember')).toBeUndefined();
+    });
+
+    it('a flawless round that was lost does not count', () => {
+      const { profile } = make();
+      profile.recordRound(play(1, false, { misses: 0 }), NO_PROGRESS);
+      expect(profile.data.stats.flawlessWins).toBe(0);
+      expect(profile.data.ownedSkins).not.toContain('ember');
+    });
+
+    it('an item that is earned can never be bought', () => {
+      const { profile } = make({ version: 2, coins: 9999 });
+      expect(profile.buy('ember')).toBe('not-for-sale');
+      expect(profile.data.ownedSkins).not.toContain('ember');
+    });
+
+    it('does not own the skin of an achievement that was not earned', () => {
+      const { profile } = make();
+      profile.recordRound(play(1, true), NO_PROGRESS);
+      expect(profile.data.ownedSkins).toEqual(['classic']);
+    });
+
+    it('earns a biome by winning its last level, also with levels won in older saves', () => {
+      const { profile } = make({ version: 2, clearedLevels: [1] });
+      expect(profile.recordRound(play(2, true, { hits: 0 }), NO_PROGRESS).unlocked).toEqual([
+        { id: 'clear-beach', coins: 12, items: [] },
+      ]);
+    });
+
+    it('does not earn a biome while one of its levels is still to win', () => {
+      const { profile } = make();
+      const { unlocked } = profile.recordRound(play(1, true, { hits: 0 }), NO_PROGRESS);
+      expect(unlocked).toEqual([]);
+    });
+
+    it('gives a save that had won a whole biome before M8 the achievement on its next round', () => {
+      const { profile } = make({ version: 2, clearedLevels: [1, 2] });
+      const { unlocked } = profile.recordRound(play(2, true, { hits: 0 }), NO_PROGRESS);
+      expect(unlocked.map((unlock) => unlock.id)).toEqual(['clear-beach']); // the save never had it
+      expect(profile.recordRound(play(2, true, { hits: 0 }), NO_PROGRESS).unlocked).toEqual([]);
+    });
+
+    it('gives the achievements screen the progress of every one, in order', () => {
+      const { profile } = make();
+      profile.recordRound(play(1, true, { bestCombo: 3, hits: 2 }), NO_PROGRESS);
+      expect(profile.achievementProgress()).toEqual([
+        { id: 'first-hit', earned: true, progress: { current: 1, goal: 1 } },
+        { id: 'combo-4', earned: false, progress: { current: 3, goal: 4 } },
+        { id: 'flawless-win', earned: false, progress: { current: 0, goal: 1 } },
+        { id: 'clear-beach', earned: false, progress: { current: 1, goal: 2 } },
+      ]);
+    });
+
+    it('tells the listeners once, after everything was applied', () => {
+      const { profile } = make();
+      const seen: number[] = [];
+      profile.onChange(() => seen.push(profile.data.coins));
+      profile.recordRound(play(1, false, { bestCombo: 4 }), NO_PROGRESS);
+      expect(seen).toEqual([15]);
     });
   });
 
@@ -263,7 +464,11 @@ describe('Profile', () => {
     const makeWithTimer = (stored?: unknown) => {
       const { repo, saved } = memoryRepo(stored);
       const timer = manualTimer();
-      return { profile: new Profile(repo, RULES, CATALOG, ECONOMY, timer.later), saved, timer };
+      return {
+        profile: new Profile(repo, RULES, CATALOG, ECONOMY, ACHIEVEMENTS, timer.later),
+        saved,
+        timer,
+      };
     };
 
     it('keeps the volume in memory at once but saves it once, after the dragging stops', () => {

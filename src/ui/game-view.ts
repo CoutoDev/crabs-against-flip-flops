@@ -2,6 +2,13 @@ import type { RoundOutcome, Screen, SettingsOrigin } from '../application/game-f
 import type { Locale } from '../application/locale';
 import type { CrabType } from '../domain/entities/crab';
 import type { Biome } from '../domain/entities/level';
+import {
+  AchievementList,
+  achievementName,
+  rewardText,
+  type AchievementsModel,
+  type RewardView,
+} from './achievements-view';
 import { canvasLabelKey, crabNameKey, levelName } from './campaign-text';
 import { button, el } from './dom';
 import type { HudModel } from './hud-model';
@@ -33,6 +40,8 @@ export interface ViewActions {
   commitVolume(): void;
   openShop(): void;
   closeShop(): void;
+  openAchievements(): void;
+  closeAchievements(): void;
   buySkin(skinId: string): void;
   /** Turns the whole point bank into coins. */
   convertPoints(): void;
@@ -50,6 +59,8 @@ export interface RoundCreditView {
   readonly reduced: boolean;
   /** The share that counts on a level already cleared (for the explanation). */
   readonly replayPercent: number;
+  /** Achievements this round earned, in the order they were earned. */
+  readonly unlocked: readonly { readonly id: string; readonly reward: RewardView }[];
 }
 
 /** What the view needs to know about the campaign to draw the level picker and the field label. */
@@ -269,10 +280,13 @@ export class GameView {
   private readonly live = el('p', 'sr-only');
 
   private shopModel: ShopModel | undefined;
+  private achievementsModel: AchievementsModel | undefined;
   private playerName = '';
   private readonly menu: Overlay;
   private readonly shop: Overlay;
   private readonly shopList: ShopList;
+  private readonly achievementsScreen: Overlay;
+  private readonly achievementList: AchievementList;
   private readonly bank: BankPanel;
   private readonly nameField: NameField;
   private readonly briefing: Overlay;
@@ -285,7 +299,9 @@ export class GameView {
   private readonly languagePanel: LanguagePanel;
   private readonly menuDock: Dock;
   private readonly pausedDock: Dock;
-  private readonly menuTiles: Readonly<Record<'shop' | 'audio' | 'language', Tile>>;
+  private readonly menuTiles: Readonly<
+    Record<'shop' | 'achievements' | 'audio' | 'language', Tile>
+  >;
   private readonly pausedTiles: Readonly<Record<'audio' | 'language', Tile>>;
   private readonly levelPicker: LevelPicker;
 
@@ -311,6 +327,7 @@ export class GameView {
     this.languagePanel = new LanguagePanel(actions.setLocale);
     this.menuTiles = {
       shop: tile('cart', 'shop', actions.openShop),
+      achievements: tile('trophy', 'achievements', actions.openAchievements),
       audio: tile('speaker', 'audio', actions.openAudio),
       language: tile('globe', 'language', actions.openLanguage),
     };
@@ -341,6 +358,16 @@ export class GameView {
     this.shop.initialFocus = () => shopBack;
     this.shop.addExtra(this.bank.root);
     this.shop.addExtra(this.shopList.root);
+    this.achievementList = new AchievementList((id) => skinName(this.requireTranslator(), id));
+    this.achievementsScreen = new Overlay('achievements', 'game-achievements', false);
+    this.achievementsScreen.setBadge('trophy');
+    const achievementsBack = this.achievementsScreen.addButton(
+      actions.closeAchievements,
+      'back',
+      'control--back',
+    );
+    this.achievementsScreen.initialFocus = () => achievementsBack;
+    this.achievementsScreen.addExtra(this.achievementList.root);
     this.targets = new TargetList(icons);
     this.briefing = new Overlay('briefing', 'game-briefing');
     this.briefing.addExtra(this.targets.root);
@@ -374,6 +401,7 @@ export class GameView {
       this.canvas,
       this.menu.root,
       this.shop.root,
+      this.achievementsScreen.root,
       this.briefing.root,
       this.paused.root,
       this.ended.root,
@@ -414,6 +442,7 @@ export class GameView {
     this.audioPanel.update(translator, this.audio);
     this.languagePanel.update(translator);
     this.menuTiles.shop.setCaption(t('menu.shop'));
+    this.menuTiles.achievements.setCaption(t('menu.achievements'));
     this.menuTiles.audio.setCaption(t('menu.audio'));
     this.menuTiles.language.setCaption(t('settings.language'));
     this.pausedTiles.audio.setCaption(t('menu.audio'));
@@ -430,6 +459,7 @@ export class GameView {
     this.languageScreen.setTexts(t('language.title'), '', [t('settings.back')]);
     this.nameField.update(translator, this.playerName);
     this.renderShop();
+    this.renderAchievements();
     this.paused.setTexts(t('pause.title'), '', [t('pause.resume'), t('round.menu')]);
     this.renderCampaign();
     this.renderEnded();
@@ -519,17 +549,43 @@ export class GameView {
     this.renderShop();
   }
 
+  /** The achievements screen follows the player's save. */
+  updateAchievements(model: AchievementsModel): void {
+    this.achievementsModel = model;
+    this.renderAchievements();
+  }
+
   /** Set when a round ends, before the end dialog is shown. */
   setRoundCredit(credit: RoundCreditView): void {
     this.credit = credit;
   }
 
   private creditText(outcome: RoundOutcome, t: Translator['t']): string {
-    const credit = this.credit ?? { points: outcome.score, reduced: false, replayPercent: 100 };
+    const credit = this.credit ?? {
+      points: outcome.score,
+      reduced: false,
+      replayPercent: 100,
+      unlocked: [],
+    };
     const points = t('score.points', { count: credit.points });
     return credit.reduced
       ? t('round.earnedReduced', { points, percent: credit.replayPercent })
       : t('round.earned', { points });
+  }
+
+  /** One line per achievement the round earned: its name and what it paid. */
+  private unlockedLines(translator: Translator): string[] {
+    return (this.credit?.unlocked ?? []).map(({ id, reward }) =>
+      translator.t('round.unlocked', {
+        name: achievementName(translator, id),
+        reward: rewardText(translator, reward, (skinId) => skinName(translator, skinId)),
+      }),
+    );
+  }
+
+  private requireTranslator(): Translator {
+    if (this.translator === undefined) throw new Error('The view has no translator yet');
+    return this.translator;
   }
 
   /** The name of a skin in the current language, for announcements. */
@@ -547,6 +603,19 @@ export class GameView {
       t('shop.title'),
       t('shop.balance', { coins: t('score.coins', { count: shopModel.coins }) }),
       [t('shop.back')],
+    );
+  }
+
+  private renderAchievements(): void {
+    const { translator, achievementsModel } = this;
+    if (translator === undefined || achievementsModel === undefined) return;
+    const { t } = translator;
+    this.achievementList.update(translator, achievementsModel);
+    const earned = achievementsModel.rows.filter((row) => row.earned).length;
+    this.achievementsScreen.setTexts(
+      t('achievements.title'),
+      t('achievements.summary', { earned, total: achievementsModel.rows.length }),
+      [t('achievements.back')],
     );
   }
 
@@ -581,6 +650,7 @@ export class GameView {
       [
         t('round.summary', { score: outcome.score, hits: outcome.hits, throws: outcome.throws }),
         this.creditText(outcome, t),
+        ...this.unlockedLines(translator),
         outcome.newBest
           ? t('round.newBest')
           : t('round.best', { points: t('score.points', { count: outcome.bestScore }) }),
@@ -598,6 +668,7 @@ export class GameView {
     const overlays: Readonly<Record<OverlayScreen, Overlay>> = {
       menu: this.menu,
       shop: this.shop,
+      achievements: this.achievementsScreen,
       audio: this.audioScreen,
       language: this.languageScreen,
       briefing: this.briefing,
@@ -628,6 +699,9 @@ export class GameView {
     if (previous === 'audio') return tiles.audio.root;
     if (previous === 'language') return tiles.language.root;
     if (previous === 'shop' && this.screen === 'menu') return this.menuTiles.shop.root;
+    if (previous === 'achievements' && this.screen === 'menu') {
+      return this.menuTiles.achievements.root;
+    }
     return undefined;
   }
 
@@ -646,6 +720,9 @@ export class GameView {
         break;
       case 'shop':
         this.shop.focusPrimary();
+        break;
+      case 'achievements':
+        this.achievementsScreen.focusPrimary();
         break;
       case 'audio':
         this.audioScreen.focusPrimary();

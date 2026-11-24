@@ -1,5 +1,5 @@
 /**
- * The economy as data (D35, agreed on 2026-11-23). Points measure performance and are never spent
+ * The economy as data (D38, agreed on 2026-11-23). Points measure performance and are never spent
  * directly: they sit in the point bank until the player converts them into coins, which is what
  * the shop charges. Both numbers can be tuned without touching any rule.
  */

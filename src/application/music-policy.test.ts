@@ -3,9 +3,12 @@ import type { Screen } from './game-flow';
 import { musicFor } from './music-policy';
 
 describe('musicFor', () => {
-  it.each(['menu', 'shop', 'briefing', 'playing'] as const)('plays the biome on %s', (screen) => {
-    expect(musicFor(screen, 'rocks')).toBe('rocks');
-  });
+  it.each(['menu', 'shop', 'achievements', 'briefing', 'playing'] as const)(
+    'plays the biome on %s',
+    (screen) => {
+      expect(musicFor(screen, 'rocks')).toBe('rocks');
+    },
+  );
 
   it.each(['paused', 'ended'] as const)('is silent on %s', (screen) => {
     expect(musicFor(screen, 'rocks')).toBeUndefined();
@@ -23,6 +26,7 @@ describe('musicFor', () => {
     const screens: Record<Screen, true> = {
       menu: true,
       shop: true,
+      achievements: true,
       audio: true,
       language: true,
       briefing: true,

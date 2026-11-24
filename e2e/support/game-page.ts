@@ -4,7 +4,15 @@ import { expect, type Locator, type Page } from '@playwright/test';
 const SAVE_KEY = 'crabs-against-flip-flops:save';
 
 export type ScreenName =
-  'menu' | 'shop' | 'audio' | 'language' | 'briefing' | 'playing' | 'paused' | 'ended';
+  | 'menu'
+  | 'shop'
+  | 'achievements'
+  | 'audio'
+  | 'language'
+  | 'briefing'
+  | 'playing'
+  | 'paused'
+  | 'ended';
 
 interface Point {
   readonly x: number;
@@ -91,8 +99,8 @@ export class GamePage {
     return this.page.locator('.overlay:not([hidden]) .control--primary');
   }
 
-  /** The icon button (Shop, Audio or Language) of the menu or of the pause screen. */
-  tile(name: 'shop' | 'audio' | 'language'): Locator {
+  /** The icon button (Shop, Achievements, Audio or Language) of the menu or of the pause screen. */
+  tile(name: 'shop' | 'achievements' | 'audio' | 'language'): Locator {
     return this.page.locator(`.overlay:not([hidden]) [data-tile="${name}"]`);
   }
 
