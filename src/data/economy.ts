@@ -4,7 +4,7 @@
  * the shop charges. Both numbers can be tuned without touching any rule.
  */
 
-/** 5 points make 1 coin. Conversion is one way: coins never turn back into points. */
+/** 25 points make 1 coin. Conversion is one way: coins never turn back into points. */
 export const POINTS_PER_COIN = 25;
 
 /**

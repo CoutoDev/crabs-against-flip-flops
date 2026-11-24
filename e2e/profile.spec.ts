@@ -1,3 +1,4 @@
+import { POINTS_PER_COIN as RATE } from '../src/data/economy';
 import { expect, test } from './support/fixtures';
 
 const save = (overrides: Record<string, unknown> = {}) => ({
@@ -95,19 +96,25 @@ test.describe('shop', () => {
     game,
     page,
   }) => {
-    await game.seedSave(save({ points: 203, coins: 1 }));
+    // Written against the rate in `data/economy.ts`, so tuning it does not break the test.
+    const points = 8 * RATE + 3;
+    await game.seedSave(save({ points, coins: 33 }));
     await page.getByRole('button', { name: 'Shop' }).click();
     const bank = game.overlay('shop').locator('.bank');
-    await expect(bank.locator('.bank__points')).toHaveText('Bank: 203 points');
-    await expect(bank.locator('.bank__worth')).toHaveText('Worth 40 coins · 5 points = 1 coin');
+    await expect(bank.locator('.bank__points')).toHaveText(`Bank: ${points} points`);
+    await expect(bank.locator('.bank__worth')).toHaveText(
+      `Worth 8 coins · ${RATE} points = 1 coin`,
+    );
 
     const convert = bank.getByRole('button', { name: 'Convert all' });
     await expect(convert).toHaveAttribute('aria-disabled', 'false');
-    await convert.click({ force: true }); // a press on it does nothing
+    await convert.click();
     await expect(balance(game)).toHaveText('You have 41 coins');
     await expect(bank.locator('.bank__points')).toHaveText('Bank: 3 points');
-    await expect(bank.locator('.bank__worth')).toHaveText('Worth 0 coins · 5 points = 1 coin');
-    expect(await game.liveText()).toBe('Converted: 40 coins added');
+    await expect(bank.locator('.bank__worth')).toHaveText(
+      `Worth 0 coins · ${RATE} points = 1 coin`,
+    );
+    expect(await game.liveText()).toBe('Converted: 8 coins added');
 
     // Nothing left to convert: the button says so but keeps the keyboard focus.
     await expect(convert).toHaveAttribute('aria-disabled', 'true');
@@ -170,14 +177,20 @@ test.describe('shop', () => {
 
   test('is in Portuguese too', async ({ game, page }) => {
     await game.seedSave(
-      save({ points: 12, coins: 1, settings: { muted: false, volume: 1, locale: 'pt-BR' } }),
+      save({
+        points: 2 * RATE + 2,
+        coins: 1,
+        settings: { muted: false, volume: 1, locale: 'pt-BR' },
+      }),
     );
     await page.getByRole('button', { name: 'Loja' }).click();
     await expect(game.overlay('shop').locator('.overlay__title')).toHaveText('Loja de chinelos');
     await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('Você tem 1 moeda');
-    await expect(game.overlay('shop').locator('.bank__points')).toHaveText('Banco: 12 pontos');
+    await expect(game.overlay('shop').locator('.bank__points')).toHaveText(
+      `Banco: ${2 * RATE + 2} pontos`,
+    );
     await expect(game.overlay('shop').locator('.bank__worth')).toHaveText(
-      'Vale 2 moedas · 5 pontos = 1 moeda',
+      `Vale 2 moedas · ${RATE} pontos = 1 moeda`,
     );
     await expect(page.locator('[data-skin="ocean"] .skins__price')).toHaveText('40 moedas');
     await expect(page.locator('[data-skin="ocean"] .skins__name')).toHaveText('Oceano');
