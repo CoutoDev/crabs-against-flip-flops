@@ -5,7 +5,7 @@
  */
 
 /** 5 points make 1 coin. Conversion is one way: coins never turn back into points. */
-export const POINTS_PER_COIN = 5;
+export const POINTS_PER_COIN = 25;
 
 /**
  * Share of a round's points that reach the point bank when the level was already cleared before
