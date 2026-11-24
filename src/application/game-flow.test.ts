@@ -429,6 +429,77 @@ describe('GameFlow', () => {
     });
   });
 
+  describe('audio and language screens', () => {
+    it.each(['openAudio', 'openLanguage'] as const)(
+      '%s opens from the menu and Back returns to it',
+      (open) => {
+        const { flow } = setup();
+        flow[open]();
+        expect(flow.screen).toBe(open === 'openAudio' ? 'audio' : 'language');
+        expect(flow.settingsOrigin).toBe('menu');
+        flow.closeSettings();
+        expect(flow.screen).toBe('menu');
+      },
+    );
+
+    it('opens from the pause and returns to it, leaving the round frozen', () => {
+      const { flow } = setup();
+      begin(flow);
+      const session = must(flow.session);
+      flow.pause();
+      flow.openAudio();
+      expect(flow.screen).toBe('audio');
+      expect(flow.settingsOrigin).toBe('paused');
+      expect(session.paused).toBe(true);
+      flow.closeSettings();
+      expect(flow.screen).toBe('paused');
+      expect(session.paused).toBe(true);
+      flow.resume();
+      expect(flow.screen).toBe('playing');
+      expect(session.paused).toBe(false);
+    });
+
+    it('can go from one to the other and still remembers where it came from', () => {
+      const { flow } = setup();
+      flow.openAudio();
+      flow.openLanguage();
+      expect(flow.screen).toBe('language');
+      expect(flow.settingsOrigin).toBe('menu');
+      flow.closeSettings();
+      expect(flow.screen).toBe('menu');
+    });
+
+    it('is ignored from the shop, the briefing, the round and the end screen', () => {
+      const { flow, bus } = setup();
+      const listener = vi.fn();
+      flow.openShop();
+      flow.onChange(listener);
+      flow.openAudio();
+      flow.openLanguage();
+      expect(flow.screen).toBe('shop');
+      flow.closeShop();
+      flow.play();
+      flow.openLanguage();
+      expect(flow.screen).toBe('briefing');
+      flow.start();
+      flow.openAudio();
+      expect(flow.screen).toBe('playing');
+      bus.publish({ type: 'RoundLost', score: 0 });
+      flow.openAudio();
+      expect(flow.screen).toBe('ended');
+      expect(listener).toHaveBeenCalledTimes(4); // closeShop, play, start and the end: the ignored calls say nothing
+    });
+
+    it('closeSettings does nothing on other screens', () => {
+      const { flow } = setup();
+      const listener = vi.fn();
+      flow.onChange(listener);
+      flow.closeSettings();
+      expect(flow.screen).toBe('menu');
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
   describe('best score in the outcome', () => {
     const levelWithEasyHits = {
       spawn: { intervalMs: { min: 1, max: 1 }, maxOnScreen: 1, laneY: { min: 100, max: 100 } },

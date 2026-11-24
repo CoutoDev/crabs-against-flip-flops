@@ -4,7 +4,11 @@ import type { DomainEvent } from '../domain/events';
 import type { EventBus } from './event-bus';
 import { GameSession } from './game-session';
 
-export type Screen = 'menu' | 'shop' | 'briefing' | 'playing' | 'paused' | 'ended';
+export type Screen =
+  'menu' | 'shop' | 'audio' | 'language' | 'briefing' | 'playing' | 'paused' | 'ended';
+
+/** Where the audio and language screens can be opened from, and where their Back button returns. */
+export type SettingsOrigin = 'menu' | 'paused';
 
 export interface RoundOutcome {
   readonly result: 'won' | 'lost';
@@ -47,6 +51,7 @@ export interface GameFlowDeps {
  */
 export class GameFlow {
   private current: Screen = 'menu';
+  private origin: SettingsOrigin = 'menu';
   private currentSession: GameSession | undefined;
   private currentOutcome: RoundOutcome | undefined;
   private currentLevelIndex = 0;
@@ -116,6 +121,28 @@ export class GameFlow {
     return () => {
       this.roundEndListeners = this.roundEndListeners.filter((candidate) => candidate !== listener);
     };
+  }
+
+  /** The screen the audio and language screens go back to (meaningful while one of them is open). */
+  get settingsOrigin(): SettingsOrigin {
+    return this.origin;
+  }
+
+  /**
+   * The audio and language screens are reached from the main menu or from the pause screen. They
+   * never touch the round: a paused round stays paused underneath and Back returns to the pause.
+   */
+  openAudio(): void {
+    this.openSettings('audio');
+  }
+
+  openLanguage(): void {
+    this.openSettings('language');
+  }
+
+  closeSettings(): void {
+    if (this.current !== 'audio' && this.current !== 'language') return;
+    this.go(this.origin);
   }
 
   /** The shop is reached from the menu and goes back to it. */
@@ -247,6 +274,12 @@ export class GameFlow {
     if (levelIndex > this.frontierIndex) {
       throw new RangeError(`Level index ${levelIndex} is still locked`);
     }
+  }
+
+  private openSettings(screen: 'audio' | 'language'): void {
+    if (this.current === 'menu' || this.current === 'paused') this.origin = this.current;
+    else if (this.current !== 'audio' && this.current !== 'language') return;
+    this.go(screen);
   }
 
   private go(screen: Screen): void {

@@ -65,9 +65,9 @@ test.describe('performance guards', () => {
   });
 
   test('dragging the volume saves once, not once per step', async ({ game, page }) => {
-    await game.expectScreen('menu');
+    await game.openAudio();
     await startCounting(page);
-    await page.locator('#menu-volume').evaluate((input: HTMLInputElement) => {
+    await game.volume().evaluate((input: HTMLInputElement) => {
       for (let value = 100; value >= 10; value -= 5) {
         input.value = String(value);
         input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -89,14 +89,17 @@ test.describe('performance guards', () => {
     await page.getByLabel('Your name').blur();
     expect((await counts(page)).writes, 'saved when the field is left').toBe(1);
 
-    await page.locator('#menu-volume').evaluate((input: HTMLInputElement) => {
+    await game.openAudio();
+    await game.volume().evaluate((input: HTMLInputElement) => {
       input.value = '30';
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
     expect((await counts(page)).writes, 'flushed by pagehide').toBe(2);
     await game.reload();
-    await expect(page.locator('#menu-volume')).toHaveValue('30');
+    await game.openAudio();
+    await expect(game.volume()).toHaveValue('30');
+    await game.back();
     await expect(page.getByLabel('Your name')).toHaveValue('Maria da Silva');
   });
 });
@@ -106,7 +109,8 @@ test.describe('the picture is still right after skipping frames', () => {
     await game.play();
     await page.keyboard.press('p');
     await game.expectScreen('paused');
-    await page.getByRole('button', { name: 'Português' }).click();
+    await game.openLanguage();
+    await game.language('Português').click();
     await expect(page.locator('.hud__item--score .hud__label')).toHaveText('Pontos');
     await expect(game.hud('level')).toHaveText('Nível 1');
   });

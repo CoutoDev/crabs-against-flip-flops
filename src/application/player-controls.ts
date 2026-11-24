@@ -36,6 +36,11 @@ export class PlayerControls {
   handle(command: PlayerCommand): boolean {
     switch (command.kind) {
       case 'pause':
+        // Esc is "back" on the audio and language screens.
+        if (this.flow.screen === 'audio' || this.flow.screen === 'language') {
+          this.flow.closeSettings();
+          return true;
+        }
         if (this.flow.screen !== 'playing' && this.flow.screen !== 'paused') return false;
         this.flow.togglePause();
         return true;

@@ -24,6 +24,23 @@ test.describe('accessibility (axe, WCAG 2.1 AA)', () => {
     expect(await violations(page)).toEqual([]);
   });
 
+  test('audio', async ({ game, page }) => {
+    await game.openAudio();
+    expect(await violations(page)).toEqual([]);
+  });
+
+  test('language', async ({ game, page }) => {
+    await game.openLanguage();
+    expect(await violations(page)).toEqual([]);
+  });
+
+  test('audio opened from the pause', async ({ game, page }) => {
+    await game.play();
+    await page.keyboard.press('p');
+    await game.openAudio();
+    expect(await violations(page)).toEqual([]);
+  });
+
   test('briefing', async ({ game, page }) => {
     await game.openBriefing();
     expect(await violations(page)).toEqual([]);
@@ -49,7 +66,12 @@ test.describe('accessibility (axe, WCAG 2.1 AA)', () => {
 
   test('menu in Portuguese', async ({ game, page }) => {
     await game.expectScreen('menu');
-    await page.getByRole('button', { name: 'Português' }).click();
+    await game.chooseLanguage('Português');
+    expect(await violations(page)).toEqual([]);
+    await game.openAudio();
+    expect(await violations(page)).toEqual([]);
+    await game.back();
+    await game.openLanguage();
     expect(await violations(page)).toEqual([]);
   });
 });

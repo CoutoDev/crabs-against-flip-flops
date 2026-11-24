@@ -8,16 +8,22 @@ test.describe('audio settings', () => {
     await page.getByLabel('Your name').click(); // any first gesture wakes the audio
     await expect.poll(async () => (await game.audioSpy()).oscillators).toBeGreaterThan(3);
 
-    await expect(page.getByRole('button', { name: /^Music: on/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    await game.openAudio();
+    await expect(game.musicSwitch()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('the music keeps playing on the audio screen, so the volume can be judged by ear', async ({
+    game,
+  }) => {
+    await game.openAudio();
+    await expect.poll(async () => (await game.audioSpy()).oscillators).toBeGreaterThan(3);
   });
 
   test('turning the music off stops new notes; the effects stay', async ({ game, page }) => {
-    await page.getByRole('button', { name: /^Music: on/ }).click();
-    const off = page.getByRole('button', { name: /^Music: off/ });
-    await expect(off).toHaveAttribute('aria-pressed', 'false');
+    await game.openAudio();
+    const off = game.musicSwitch();
+    await off.click();
+    await expect(off).toHaveAttribute('aria-checked', 'false');
     await page.waitForTimeout(400);
     const before = (await game.audioSpy()).oscillators;
     await page.waitForTimeout(900);
@@ -27,16 +33,19 @@ test.describe('audio settings', () => {
     await expect.poll(async () => (await game.audioSpy()).oscillators).toBeGreaterThan(before + 2);
   });
 
-  test('the music and volume choices are remembered', async ({ game, page }) => {
-    await page.getByRole('button', { name: /^Music: on/ }).click();
-    await page.locator('#menu-volume').fill('40');
+  test('the music and volume choices are remembered', async ({ game }) => {
+    await game.openAudio();
+    await game.musicSwitch().click();
+    await game.volume().fill('40');
     await game.reload();
-    await expect(page.getByRole('button', { name: /^Music: off/ })).toBeVisible();
-    await expect(page.locator('#menu-volume')).toHaveValue('40');
+    await game.openAudio();
+    await expect(game.musicSwitch()).toHaveAttribute('aria-checked', 'false');
+    await expect(game.volume()).toHaveValue('40');
   });
 
   test('muting the game stops the music too', async ({ game, page }) => {
-    await page.getByRole('button', { name: /Sound: on/ }).click();
+    await game.openAudio();
+    await game.soundSwitch().click();
     await page.waitForTimeout(400);
     const before = (await game.audioSpy()).oscillators;
     await page.waitForTimeout(900);

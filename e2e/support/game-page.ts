@@ -3,7 +3,8 @@ import { expect, type Locator, type Page } from '@playwright/test';
 /** Where the game keeps its save (src/infrastructure/storage). */
 const SAVE_KEY = 'crabs-against-flip-flops:save';
 
-export type ScreenName = 'menu' | 'shop' | 'briefing' | 'playing' | 'paused' | 'ended';
+export type ScreenName =
+  'menu' | 'shop' | 'audio' | 'language' | 'briefing' | 'playing' | 'paused' | 'ended';
 
 interface Point {
   readonly x: number;
@@ -88,6 +89,54 @@ export class GamePage {
   /** The visible dialog's main button, whatever the language. */
   primaryButton(): Locator {
     return this.page.locator('.overlay:not([hidden]) .control--primary');
+  }
+
+  /** The icon button (Shop, Audio or Language) of the menu or of the pause screen. */
+  tile(name: 'shop' | 'audio' | 'language'): Locator {
+    return this.page.locator(`.overlay:not([hidden]) [data-tile="${name}"]`);
+  }
+
+  /** From the menu or the pause: opens the audio screen. */
+  async openAudio(): Promise<void> {
+    await this.tile('audio').click();
+    await this.expectScreen('audio');
+  }
+
+  /** From the menu or the pause: opens the language screen. */
+  async openLanguage(): Promise<void> {
+    await this.tile('language').click();
+    await this.expectScreen('language');
+  }
+
+  /** The Back button of the audio and language screens. */
+  async back(): Promise<void> {
+    await this.page.locator('.overlay:not([hidden]) .control--back').click();
+  }
+
+  /** On the language screen: the card of a language, by the name written on it. */
+  language(name: string): Locator {
+    return this.page.getByRole('button', { name, exact: true });
+  }
+
+  /** From the menu: picks a language on its own screen and comes back to the menu. */
+  async chooseLanguage(name: string): Promise<void> {
+    await this.openLanguage();
+    await this.language(name).click();
+    await this.back();
+    await this.expectScreen('menu');
+  }
+
+  /** On the audio screen. */
+  soundSwitch(): Locator {
+    return this.page.locator('.settings .switch').nth(0);
+  }
+
+  musicSwitch(): Locator {
+    return this.page.locator('.settings .switch').nth(1);
+  }
+
+  volume(): Locator {
+    return this.page.locator('#audio-volume');
   }
 
   /** From the menu: opens the briefing of the selected level. */
