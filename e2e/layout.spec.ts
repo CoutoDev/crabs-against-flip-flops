@@ -6,7 +6,15 @@ test.describe('layout', () => {
     game,
     page,
   }) => {
-    for (const screen of ['menu', 'audio', 'language', 'shop', 'briefing', 'playing'] as const) {
+    for (const screen of [
+      'menu',
+      'audio',
+      'language',
+      'shop',
+      'achievements',
+      'briefing',
+      'playing',
+    ] as const) {
       if (screen === 'audio') await game.openAudio();
       if (screen === 'language') {
         await game.back();
@@ -15,6 +23,10 @@ test.describe('layout', () => {
       if (screen === 'shop') {
         await game.back();
         await game.tile('shop').click();
+      }
+      if (screen === 'achievements') {
+        await game.back();
+        await game.tile('achievements').click();
       }
       if (screen === 'briefing') {
         await page.getByRole('button', { name: /Back|Voltar/ }).click();

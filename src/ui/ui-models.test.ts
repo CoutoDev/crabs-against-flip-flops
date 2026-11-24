@@ -6,7 +6,9 @@ import { createRound, type RoundState } from '../domain/rules/round';
 import { makeLevel, TEST_CRAB_SPECS } from '../domain/test-support';
 import { announcementFor } from './announce';
 import { CRAB_TYPE_IDS } from '../domain/entities/crab';
+import { ACHIEVEMENTS } from '../data/achievements';
 import { SKINS } from '../data/skins';
+import { achievementHintKey, achievementNameKey, rewardText } from './achievements-view';
 import { skinName } from './shop-view';
 import { canvasLabelKey, crabNameKey, levelName } from './campaign-text';
 import { buildHud, LOW_AMMO_THRESHOLD } from './hud-model';
@@ -138,5 +140,31 @@ describe('campaign text', () => {
     const translator = createTranslator(locale);
     const labels = new Set(LEVELS.map((level) => translator.t(canvasLabelKey(level.biome))));
     expect(labels.size).toBe(new Set(LEVELS.map((level) => level.biome)).size);
+  });
+});
+
+describe('achievement text', () => {
+  it.each(LOCALES)('%s names and explains every achievement', (locale) => {
+    const translator = createTranslator(locale);
+    const names = ACHIEVEMENTS.map((entry) => translator.t(achievementNameKey(entry.id)));
+    const hints = ACHIEVEMENTS.map((entry) => translator.t(achievementHintKey(entry.id)));
+    for (const [index, name] of names.entries()) {
+      expect(name, ACHIEVEMENTS[index]?.id).not.toMatch(/^achievements\./);
+      expect(hints[index], ACHIEVEMENTS[index]?.id).not.toMatch(/^achievements\./);
+    }
+    expect(new Set(names).size).toBe(ACHIEVEMENTS.length);
+    expect(new Set(hints).size).toBe(ACHIEVEMENTS.length);
+  });
+
+  it('writes a reward as coins, skins, or both', () => {
+    const en = createTranslator('en');
+    const skinLabel = (id: string) => skinName(en, id);
+    expect(rewardText(en, { coins: 10, items: [] }, skinLabel)).toBe('10 coins');
+    expect(rewardText(en, { coins: 0, items: ['ember'] }, skinLabel)).toBe('skin Ember');
+    expect(rewardText(en, { coins: 1, items: ['neon'] }, skinLabel)).toBe('1 coin, skin Neon');
+    const pt = createTranslator('pt-BR');
+    expect(rewardText(pt, { coins: 15, items: ['ember'] }, (id) => skinName(pt, id))).toBe(
+      '15 moedas, skin Brasa',
+    );
   });
 });

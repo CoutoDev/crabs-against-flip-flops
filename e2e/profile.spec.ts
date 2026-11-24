@@ -1,4 +1,6 @@
+import { ACHIEVEMENTS } from '../src/data/achievements';
 import { POINTS_PER_COIN as RATE } from '../src/data/economy';
+import { SKINS } from '../src/data/skins';
 import { expect, test } from './support/fixtures';
 
 const save = (overrides: Record<string, unknown> = {}) => ({
@@ -14,6 +16,10 @@ const save = (overrides: Record<string, unknown> = {}) => ({
   settings: { muted: false, volume: 1, locale: null },
   ...overrides,
 });
+
+/** Every achievement already earned: a round played by a bot can then not pay any coins. */
+const EARNED_ALL = ACHIEVEMENTS.map((entry) => entry.id);
+const SKIN_COUNT = SKINS.length;
 
 test.describe('player name', () => {
   test('is optional, saved and still there after a reload', async ({ game, page }) => {
@@ -163,8 +169,8 @@ test.describe('shop', () => {
         return [...seen].sort().join('|');
       }),
     );
-    expect(colors).toHaveLength(7);
-    expect(new Set(colors).size).toBe(7);
+    expect(colors).toHaveLength(SKIN_COUNT);
+    expect(new Set(colors).size).toBe(SKIN_COUNT);
     await expect(game.overlay('shop').getByRole('button', { name: 'Back' })).toBeFocused();
   });
 
@@ -198,6 +204,7 @@ test.describe('shop', () => {
 
   test('the points of a round go to the point bank, win or lose', async ({ game, page }) => {
     test.setTimeout(90_000);
+    await game.seedSave(save({ achievements: EARNED_ALL })); // so no coin is paid by an achievement
     await game.play();
     await game.playRoundWithBot();
     await game.expectScreen('ended');
@@ -217,7 +224,9 @@ test.describe('shop', () => {
     page,
   }) => {
     test.setTimeout(90_000);
-    await game.seedSave(save({ highestUnlockedLevel: 2, clearedLevels: [1] }));
+    await game.seedSave(
+      save({ highestUnlockedLevel: 2, clearedLevels: [1], achievements: EARNED_ALL }),
+    );
     await page.locator('.levels__group button').first().click(); // level 1, already cleared
     await game.play();
     await game.playRoundWithBot();

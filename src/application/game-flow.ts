@@ -5,7 +5,15 @@ import type { EventBus } from './event-bus';
 import { GameSession } from './game-session';
 
 export type Screen =
-  'menu' | 'shop' | 'audio' | 'language' | 'briefing' | 'playing' | 'paused' | 'ended';
+  | 'menu'
+  | 'shop'
+  | 'achievements'
+  | 'audio'
+  | 'language'
+  | 'briefing'
+  | 'playing'
+  | 'paused'
+  | 'ended';
 
 /** Where the audio and language screens can be opened from, and where their Back button returns. */
 export type SettingsOrigin = 'menu' | 'paused';
@@ -16,6 +24,8 @@ export interface RoundOutcome {
   readonly score: number;
   readonly hits: number;
   readonly throws: number;
+  /** Flip flops not thrown when the round ended (what a win "saved"). */
+  readonly ammoLeft: number;
   /** Best score on this level, this round included. */
   readonly bestScore: number;
   /** True when this round beat the previous best of the level (and there was one to beat). */
@@ -59,6 +69,7 @@ export class GameFlow {
   private bestScores: Readonly<Record<number, number>> = {};
   private listeners: readonly (() => void)[] = [];
   private roundEndListeners: readonly ((outcome: RoundOutcome) => void)[] = [];
+  private roundStartListeners: readonly (() => void)[] = [];
 
   constructor(private readonly deps: GameFlowDeps) {
     if (deps.levels.length === 0) throw new RangeError('GameFlow needs at least one level');
@@ -123,6 +134,20 @@ export class GameFlow {
     };
   }
 
+  /**
+   * Called each time a new round is created (from the briefing, a retry or the next level), before
+   * anything of it can happen. Whatever counts a round's events starts from zero here. Returns the
+   * unsubscribe function.
+   */
+  onRoundStart(listener: () => void): () => void {
+    this.roundStartListeners = [...this.roundStartListeners, listener];
+    return () => {
+      this.roundStartListeners = this.roundStartListeners.filter(
+        (candidate) => candidate !== listener,
+      );
+    };
+  }
+
   /** The screen the audio and language screens go back to (meaningful while one of them is open). */
   get settingsOrigin(): SettingsOrigin {
     return this.origin;
@@ -153,6 +178,17 @@ export class GameFlow {
 
   closeShop(): void {
     if (this.current !== 'shop') return;
+    this.go('menu');
+  }
+
+  /** The achievements screen is reached from the menu and goes back to it. */
+  openAchievements(): void {
+    if (this.current !== 'menu') return;
+    this.go('achievements');
+  }
+
+  closeAchievements(): void {
+    if (this.current !== 'achievements') return;
     this.go('menu');
   }
 
@@ -230,6 +266,7 @@ export class GameFlow {
     );
     if (screen === 'briefing') session.pause();
     this.currentSession = session;
+    for (const listener of this.roundStartListeners) listener();
     this.go(screen);
   }
 
@@ -257,6 +294,7 @@ export class GameFlow {
       score: state.score,
       hits: state.hits,
       throws: state.throws,
+      ammoLeft: state.ammo,
       bestScore: Math.max(previousBest, state.score),
       newBest: previousBest > 0 && state.score > previousBest,
       nextLevelIndex: result === 'won' && hasNext ? this.currentLevelIndex + 1 : undefined,

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { defaultSave, parseSave, type SaveRules } from './save-data';
+import { defaultSave, emptyStats, parseSave, type SaveRules } from './save-data';
 
 const RULES: SaveRules = {
   levelIds: [1, 2, 3],
   goalByLevel: { 1: 100, 2: 120, 3: 150 },
   skinIds: ['classic', 'ocean', 'gold'],
+  achievementIds: ['first-hit', 'combo-4'],
   defaultSkin: 'classic',
 };
 
@@ -18,6 +19,18 @@ const valid = {
   bestScoreByLevel: { 1: 150, 2: 80 },
   ownedSkins: ['classic', 'ocean'],
   equippedSkin: 'ocean',
+  stats: {
+    rounds: 9,
+    wins: 4,
+    throws: 80,
+    hits: 52,
+    bestCombo: 6,
+    flawlessWins: 1,
+    bestAmmoLeftOnWin: 3,
+    totalPoints: 1450,
+    hitsByType: { common: 30, swimmer: 15, fiddler: 7 },
+  },
+  achievements: ['first-hit', 'combo-4'],
   settings: { muted: true, music: false, volume: 0.5, locale: 'pt-BR' },
 };
 
@@ -33,6 +46,8 @@ describe('defaultSave', () => {
       bestScoreByLevel: {},
       ownedSkins: ['classic'],
       equippedSkin: 'classic',
+      stats: emptyStats(),
+      achievements: [],
       settings: { muted: false, music: true, volume: 1, locale: null },
     });
   });
@@ -163,6 +178,8 @@ describe('parseSave: migrating a version 1 save', () => {
       bestScoreByLevel: { 1: 150, 2: 80 },
       ownedSkins: ['classic', 'ocean'],
       equippedSkin: 'ocean',
+      stats: emptyStats(),
+      achievements: [],
       settings: { muted: true, music: false, volume: 0.5, locale: 'pt-BR' },
     });
   });
@@ -190,4 +207,54 @@ describe('parseSave: migrating a version 1 save', () => {
   it('repairs a bad balance like any other field', () => {
     expect(parseSave({ ...v1, balance: 'lots' }, RULES).points).toBe(0);
   });
+});
+
+describe('parseSave: stats and achievements (M8)', () => {
+  it('reads a save made before achievements with every counter at zero', () => {
+    const before: Record<string, unknown> = { ...valid };
+    delete before['stats'];
+    delete before['achievements'];
+    const result = parseSave(before, RULES);
+    expect(result.stats).toEqual(emptyStats());
+    expect(result.achievements).toEqual([]);
+    expect(result.coins).toBe(7); // the rest is untouched
+  });
+
+  it('repairs each counter on its own', () => {
+    const result = parseSave(
+      {
+        ...valid,
+        stats: { ...valid.stats, hits: -3, wins: 'many', bestCombo: 2.5, rounds: 12 },
+      },
+      RULES,
+    );
+    expect(result.stats).toMatchObject({ hits: 0, wins: 0, bestCombo: 0, rounds: 12, throws: 80 });
+  });
+
+  it('ignores crab types that do not exist and fills the ones that are missing', () => {
+    const result = parseSave(
+      { ...valid, stats: { hitsByType: { common: 5, dragon: 99, fiddler: -1 } } },
+      RULES,
+    );
+    expect(result.stats.hitsByType).toEqual({ common: 5, swimmer: 0, fiddler: 0 });
+  });
+
+  it.each([null, 7, 'x', [], true])('falls back to empty stats for %j', (stats) => {
+    expect(parseSave({ ...valid, stats }, RULES).stats).toEqual(emptyStats());
+  });
+
+  it('drops unknown achievement ids and repeats, keeping the order of the catalog', () => {
+    const result = parseSave(
+      { ...valid, achievements: ['combo-4', 'gone', 'first-hit', 'combo-4', 7] },
+      RULES,
+    );
+    expect(result.achievements).toEqual(['first-hit', 'combo-4']);
+  });
+
+  it.each([undefined, null, 'first-hit', { 0: 'first-hit' }])(
+    'reads %j as no achievements',
+    (achievements) => {
+      expect(parseSave({ ...valid, achievements }, RULES).achievements).toEqual([]);
+    },
+  );
 });

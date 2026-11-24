@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SHORELINE_Y_PX } from '../domain/constants';
 import { CRAB_TYPE_IDS } from '../domain/entities/crab';
+import { isMet } from '../application/achievements';
+import { emptyStats } from '../application/save-data';
 import { coinPrice } from '../domain/entities/item';
 import { validateLevel } from '../domain/rules/level-validation';
 import { CRAB_TYPES } from './crab-types';
+import { ACHIEVEMENTS } from './achievements';
 import { POINTS_PER_COIN, REPLAY_BANK_PERCENT } from './economy';
 import { LEVELS } from './levels';
 import { DEFAULT_SKIN_ID, SKINS } from './skins';
@@ -64,7 +67,7 @@ describe('skins data', () => {
   });
 
   it('prices are whole coins, ascending, and only the default is free', () => {
-    const prices = SKINS.map((skin) => coinPrice(skin) ?? Number.NaN);
+    const prices = SKINS.flatMap((skin) => coinPrice(skin) ?? []);
     expect(prices.every((price) => Number.isInteger(price) && price >= 0)).toBe(true);
     expect(prices).toEqual([...prices].sort((a, b) => a - b));
     expect(prices.filter((price) => price === 0)).toHaveLength(1);
@@ -78,7 +81,78 @@ describe('economy data', () => {
     expect(REPLAY_BANK_PERCENT).toBeLessThan(100);
   });
 
-  it('keeps the approved prices (2026-11-23): 1,350 coins buy every skin', () => {
-    expect(SKINS.map((skin) => coinPrice(skin))).toEqual([0, 40, 80, 130, 200, 300, 600]);
+  it('keeps the approved prices (2026-11-23): 1,350 coins buy every skin on sale', () => {
+    expect(SKINS.flatMap((skin) => coinPrice(skin) ?? [])).toEqual([0, 40, 80, 130, 200, 300, 600]);
+  });
+});
+
+describe('achievements data', () => {
+  const ids = ACHIEVEMENTS.map((entry) => entry.id);
+  const levels = LEVELS.map(({ id, biome }) => ({ id, biome }));
+
+  it('has unique ids', () => {
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('pays whole coins, and 217 in all (the list approved on 2026-11-24)', () => {
+    const coins = ACHIEVEMENTS.map((entry) => entry.coins ?? 0);
+    expect(coins.every((amount) => Number.isInteger(amount) && amount >= 0)).toBe(true);
+    expect(coins.reduce((sum, amount) => sum + amount, 0)).toBe(217);
+  });
+
+  it('every achievement pays something: coins, an item, or both', () => {
+    for (const entry of ACHIEVEMENTS) {
+      const items = SKINS.filter(
+        (skin) => 'achievement' in skin.acquire && skin.acquire.achievement === entry.id,
+      );
+      expect((entry.coins ?? 0) > 0 || items.length > 0, entry.id).toBe(true);
+    }
+  });
+
+  it('every earned item names an achievement that exists, and is never for sale', () => {
+    const earned = SKINS.filter((skin) => 'achievement' in skin.acquire);
+    expect(earned.map((skin) => skin.id)).toEqual(['ember', 'pearl', 'neon']);
+    for (const skin of earned) {
+      const achievement = 'achievement' in skin.acquire ? skin.acquire.achievement : '';
+      expect(ids, skin.id).toContain(achievement);
+      expect(coinPrice(skin), skin.id).toBeUndefined();
+    }
+  });
+
+  it('gives each exclusive item to a different achievement', () => {
+    const owners = SKINS.flatMap((skin) =>
+      'achievement' in skin.acquire ? [skin.acquire.achievement] : [],
+    );
+    expect(new Set(owners).size).toBe(owners.length);
+  });
+
+  it('asks only for things the campaign can give: every biome and crab exists', () => {
+    const biomes = new Set(LEVELS.map((level) => level.biome));
+    for (const { id, condition } of ACHIEVEMENTS) {
+      if (condition.kind === 'biomeCleared') expect(biomes.has(condition.biome), id).toBe(true);
+      if (condition.kind === 'crabHits') expect(CRAB_TYPE_IDS, id).toContain(condition.crab);
+    }
+  });
+
+  it('none is met by a new player, and the whole list is met by someone who did everything', () => {
+    const fresh = { stats: emptyStats(), clearedLevels: [], levels };
+    const everything = {
+      stats: {
+        ...emptyStats(),
+        hits: 10_000,
+        bestCombo: 50,
+        wins: 500,
+        flawlessWins: 5,
+        bestAmmoLeftOnWin: 12,
+        totalPoints: 1_000_000,
+        hitsByType: { common: 9000, swimmer: 900, fiddler: 900 },
+      },
+      clearedLevels: LEVELS.map((level) => level.id),
+      levels,
+    };
+    for (const { id, condition } of ACHIEVEMENTS) {
+      expect(isMet(condition, fresh), `${id} (new player)`).toBe(false);
+      expect(isMet(condition, everything), `${id} (everything)`).toBe(true);
+    }
   });
 });

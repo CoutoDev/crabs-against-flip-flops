@@ -2,7 +2,7 @@ import { coinPrice, type ItemCatalog } from '../entities/item';
 
 /** The part of the player's save that the shop reads and changes. */
 export interface ShopState {
-  /** Coins to spend. Points never buy anything directly: they are converted first (D35). */
+  /** Coins to spend. Points never buy anything directly: they are converted first (D38). */
   readonly coins: number;
   readonly ownedSkins: readonly string[];
   readonly equippedSkin: string;

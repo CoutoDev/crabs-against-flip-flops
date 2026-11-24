@@ -1,4 +1,5 @@
 import { MAX_PLAYER_NAME_LENGTH } from '../application/player-name';
+import { achievementName } from './achievements-view';
 import { button, el } from './dom';
 import type { Translator } from './i18n/translator';
 import type { MessageKey } from './i18n/messages/en';
@@ -13,8 +14,15 @@ export interface ShopModel {
   readonly pointsPerCoin: number;
   readonly equipped: string;
   readonly owned: readonly string[];
-  /** Prices are in coins. */
-  readonly skins: readonly { readonly id: string; readonly price: number }[];
+  /**
+   * Prices are in coins. A skin with no price is earned, never sold: `earnedBy` is the
+   * achievement that gives it, shown as a hint while the skin is still locked.
+   */
+  readonly skins: readonly {
+    readonly id: string;
+    readonly price: number | undefined;
+    readonly earnedBy: string | undefined;
+  }[];
 }
 
 export interface ShopActions {
@@ -33,7 +41,7 @@ interface ShopItem {
 }
 
 /**
- * The point bank and the button that turns it into coins (D35). The button is never really
+ * The point bank and the button that turns it into coins (D38). The button is never really
  * `disabled`: a disabled button that was just pressed loses the keyboard focus, and converting
  * everything is exactly what empties the bank. It says "disabled" with `aria-disabled` instead.
  */
@@ -67,7 +75,8 @@ export class BankPanel {
 }
 
 /**
- * The skins on sale: a picture, a name, a price and one button (Buy, Equip or Equipped). The rows
+ * The skins: a picture, a name, a price (or how to earn it) and one button (Buy, Equip, Equipped
+ * or Locked). The rows
  * are built once and then only updated, so the button the player just pressed keeps its focus
  * while it turns from Buy into Equip.
  */
@@ -87,15 +96,35 @@ export class ShopList {
       const owned = model.owned.includes(skin.id);
       const equipped = model.equipped === skin.id;
       const name = skinName(translator, skin.id);
-      const verb = equipped ? t('shop.equipped') : owned ? t('shop.equip') : t('shop.buy');
+      const locked = !owned && skin.price === undefined;
+      const verb = equipped
+        ? t('shop.equipped')
+        : owned
+          ? t('shop.equip')
+          : locked
+            ? t('shop.locked')
+            : t('shop.buy');
 
       item.name.textContent = name;
       item.price.textContent =
-        skin.price === 0 ? t('shop.free') : t('score.coins', { count: skin.price });
+        skin.price === undefined
+          ? skin.earnedBy === undefined
+            ? ''
+            : t('shop.earnedBy', { name: achievementName(translator, skin.earnedBy) })
+          : skin.price === 0
+            ? t('shop.free')
+            : t('score.coins', { count: skin.price });
       item.action.textContent = verb;
       item.action.setAttribute('aria-label', t('shop.action', { action: verb, name }));
-      item.action.disabled = equipped || (!owned && model.coins < skin.price);
-      item.action.dataset['state'] = equipped ? 'equipped' : owned ? 'owned' : 'for-sale';
+      item.action.disabled =
+        equipped || locked || (!owned && skin.price !== undefined && model.coins < skin.price);
+      item.action.dataset['state'] = equipped
+        ? 'equipped'
+        : owned
+          ? 'owned'
+          : locked
+            ? 'locked'
+            : 'for-sale';
     }
   }
 

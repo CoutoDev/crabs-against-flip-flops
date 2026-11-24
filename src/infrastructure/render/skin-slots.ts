@@ -10,6 +10,9 @@ export const SKIN_SLOTS: Readonly<Record<string, readonly [sole: number, strap: 
   pink: [COLOR.magenta, COLOR.white],
   midnight: [COLOR.deepSea, COLOR.sun],
   gold: [COLOR.sun, COLOR.coral],
+  ember: [COLOR.crabRed, COLOR.sun],
+  pearl: [COLOR.white, COLOR.sky],
+  neon: [COLOR.sky, COLOR.magenta],
 };
 
 /**
@@ -24,6 +27,9 @@ export const SKIN_TRAILS: Readonly<Record<string, readonly number[]>> = {
   pink: [COLOR.magenta, COLOR.white],
   midnight: [COLOR.sun, COLOR.white],
   gold: [COLOR.sun, COLOR.white, COLOR.coral],
+  ember: [COLOR.coral, COLOR.sun, COLOR.crabRed],
+  pearl: [COLOR.white, COLOR.sky],
+  neon: [COLOR.sky, COLOR.magenta, COLOR.white],
 };
 
 const DEFAULT_TRAIL: readonly number[] = [COLOR.white, COLOR.lightSand];

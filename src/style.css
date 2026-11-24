@@ -261,6 +261,7 @@ body {
 .overlay {
   position: absolute;
   inset: 0;
+  container: overlay / inline-size;
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
@@ -479,9 +480,101 @@ body {
   border-color: var(--sun);
 }
 
-/* A row of icon buttons with captions, like the bottom bar of a mobile game. */
+.skins__action[data-state='locked'] {
+  opacity: 0.7;
+}
+
+/* Achievements: one card per achievement, earned ones with a gold edge and a filled trophy. */
+.achievements {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  max-width: 18rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.achievements__item {
+  display: grid;
+  grid-template-columns: 1.8rem 1fr;
+  gap: 0.2rem 0.6rem;
+  align-items: start;
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  background: var(--panel);
+  border: 3px solid color-mix(in srgb, var(--sand) 45%, var(--ink));
+  box-shadow: 0 3px 0 var(--ink-dark);
+}
+
+.achievements__item[data-state='earned'] {
+  border-color: var(--sun);
+}
+
+.achievements__mark {
+  grid-row: span 2;
+  color: var(--sand);
+  opacity: 0.55;
+}
+
+.achievements__item[data-state='earned'] .achievements__mark {
+  color: var(--sun);
+  opacity: 1;
+}
+
+.achievements__mark .icon {
+  width: 1.8rem;
+  height: 1.7rem;
+}
+
+.achievements__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.achievements__name {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: var(--white);
+}
+
+.achievements__hint,
+.achievements__progress,
+.achievements__reward {
+  opacity: 0.9;
+}
+
+.achievements__bar {
+  width: 100%;
+  height: 0.5rem;
+  accent-color: var(--sun);
+}
+
+/* The state is a word, not only a color: "Earned" or "Locked". */
+.achievements__state {
+  grid-column: 2;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sand);
+}
+
+.achievements__item[data-state='earned'] .achievements__state {
+  color: var(--sun);
+}
+
+/*
+ * The icon buttons with captions, like the bottom bar of a mobile game. Two per row on a narrow
+ * panel (a phone held upright), all in one row when the panel is wide enough for four captions.
+ */
 .dock {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
   justify-content: center;
   width: 100%;
@@ -489,10 +582,11 @@ body {
 
 .tile {
   display: flex;
+  flex: 0 0 calc(50% - 0.3rem);
   flex-direction: column;
   gap: 0.2rem;
   align-items: center;
-  min-width: 4.6rem;
+  min-width: 0;
   min-height: 4.2rem;
   padding: 0.45rem 0.5rem 0.35rem;
   font: inherit;
@@ -506,6 +600,12 @@ body {
     0 4px 0 var(--ink-dark),
     inset 0 3px 0 rgb(255 255 255 / 0.1);
   cursor: pointer;
+}
+
+@container overlay (min-width: 24rem) {
+  .tile {
+    flex: 0 1 5.4rem;
+  }
 }
 
 .tile:hover {
@@ -909,14 +1009,13 @@ body {
     left: calc(100% - 1.3rem - 6px);
   }
 
-  /* Three tiles share the 172 px of the field: no side padding, a hairline gap, small captions. */
+  /* Two tiles per row, so the four captions fit the narrow field: a hairline gap, small captions. */
   .dock {
     gap: 0.25rem;
   }
 
   .tile {
-    flex: 1 1 0;
-    min-width: 0;
+    flex-basis: calc(50% - 0.125rem);
     min-height: 3.4rem;
     padding: 0.3rem 0.1rem;
     font-size: 0.6rem;

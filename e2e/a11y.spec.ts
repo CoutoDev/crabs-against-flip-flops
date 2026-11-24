@@ -24,6 +24,34 @@ test.describe('accessibility (axe, WCAG 2.1 AA)', () => {
     expect(await violations(page)).toEqual([]);
   });
 
+  test('shop with an exclusive skin still locked', async ({ game, page }) => {
+    await page.getByRole('button', { name: 'Shop' }).click();
+    await game.expectScreen('shop');
+    await expect(page.locator('[data-skin="ember"] .skins__action')).toHaveText('Locked');
+    expect(await violations(page)).toEqual([]);
+  });
+
+  test('achievements', async ({ game, page }) => {
+    await game.tile('achievements').click();
+    await game.expectScreen('achievements');
+    expect(await violations(page)).toEqual([]);
+  });
+
+  test('achievements with some earned and some in progress', async ({ game, page }) => {
+    await game.seedSave({
+      version: 2,
+      points: 0,
+      coins: 5,
+      highestUnlockedLevel: 3,
+      clearedLevels: [1, 2],
+      stats: { hits: 12, bestCombo: 3, wins: 2, totalPoints: 400 },
+      achievements: ['first-hit', 'clear-beach'],
+    });
+    await game.tile('achievements').click();
+    await game.expectScreen('achievements');
+    expect(await violations(page)).toEqual([]);
+  });
+
   test('audio', async ({ game, page }) => {
     await game.openAudio();
     expect(await violations(page)).toEqual([]);
