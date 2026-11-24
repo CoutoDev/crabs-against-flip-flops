@@ -1,20 +1,20 @@
-import type { SkinCatalog } from '../domain/entities/skin';
+import type { ItemCatalog } from '../domain/entities/item';
 
 /** Everyone owns and wears this one from the start. */
 export const DEFAULT_SKIN_ID = 'classic';
 
 /**
- * The shop catalog (D15, prices approved on 2026-11-21): color-only skins, cheapest first. A round
- * earns roughly 100 to 450 points, so the first skin is one good round away and the last one is a
- * long-term goal. Names are `skins.<id>.name` in the catalogs; colors are in the renderer
- * (`skin-slots.ts`).
+ * The shop catalog (D15): color-only skins, cheapest first, priced in coins (D35, a starting point
+ * accepted on 2026-11-23 and to be tuned by playtest). The whole catalog is 1,350 coins; how many
+ * points that takes depends on `POINTS_PER_COIN` in `economy.ts`. Names are `skins.<id>.name`
+ * in the catalogs; colors are in the renderer (`skin-slots.ts`).
  */
-export const SKINS: SkinCatalog = [
-  { id: DEFAULT_SKIN_ID, price: 0 },
-  { id: 'ocean', price: 75 },
-  { id: 'lime', price: 125 },
-  { id: 'mangrove', price: 200 },
-  { id: 'pink', price: 300 },
-  { id: 'midnight', price: 400 },
-  { id: 'gold', price: 750 },
+export const SKINS: ItemCatalog = [
+  { id: DEFAULT_SKIN_ID, kind: 'skin', acquire: { coins: 0 } },
+  { id: 'ocean', kind: 'skin', acquire: { coins: 40 } },
+  { id: 'lime', kind: 'skin', acquire: { coins: 80 } },
+  { id: 'mangrove', kind: 'skin', acquire: { coins: 130 } },
+  { id: 'pink', kind: 'skin', acquire: { coins: 200 } },
+  { id: 'midnight', kind: 'skin', acquire: { coins: 300 } },
+  { id: 'gold', kind: 'skin', acquire: { coins: 600 } },
 ];

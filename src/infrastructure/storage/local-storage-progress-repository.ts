@@ -1,5 +1,5 @@
 import type { ProgressRepository } from '../../application/ports/progress-repository';
-import type { SaveDataV1 } from '../../application/save-data';
+import type { SaveData } from '../../application/save-data';
 
 export const SAVE_KEY = 'crabs-against-flip-flops:save';
 
@@ -26,7 +26,7 @@ export class LocalStorageProgressRepository implements ProgressRepository {
     }
   }
 
-  save(data: SaveDataV1): void {
+  save(data: SaveData): void {
     try {
       this.storage()?.setItem(this.key, JSON.stringify(data));
     } catch {

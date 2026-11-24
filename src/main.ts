@@ -6,9 +6,11 @@ import { Profile } from './application/profile';
 import { GameFlow } from './application/game-flow';
 import { PlayerControls } from './application/player-controls';
 import { CRAB_TYPES } from './data/crab-types';
+import { POINTS_PER_COIN, REPLAY_BANK_PERCENT } from './data/economy';
 import { LEVELS } from './data/levels';
 import { DEFAULT_SKIN_ID, SKINS } from './data/skins';
 import { FIELD_HEIGHT_PX, FIELD_WIDTH_PX } from './domain/constants';
+import { coinPrice } from './domain/entities/item';
 import type { DomainEvent } from './domain/events';
 import { createRng } from './domain/rng';
 import { bindSfx } from './infrastructure/audio/bind-sfx';
@@ -46,10 +48,12 @@ const profile = new Profile(
   new LocalStorageProgressRepository(browserStorage),
   {
     levelIds: LEVELS.map((level) => level.id),
+    goalByLevel: Object.fromEntries(LEVELS.map((level) => [level.id, level.targetScore])),
     skinIds: SKINS.map((skin) => skin.id),
     defaultSkin: DEFAULT_SKIN_ID,
   },
   SKINS,
+  { pointsPerCoin: POINTS_PER_COIN, replayPercent: REPLAY_BANK_PERCENT },
   (run, ms) => {
     const id = setTimeout(run, ms);
     return () => clearTimeout(id);
@@ -127,6 +131,15 @@ const view = new GameView(
         view.announce(translator.t('shop.bought', { name: view.skinLabel(skinId) }));
       }
     },
+    convertPoints: () => {
+      const coins = profile.convertAll();
+      if (coins > 0) {
+        sfx.play({ id: 'buy', semitones: 0 });
+        view.announce(
+          translator.t('shop.converted', { coins: translator.t('score.coins', { count: coins }) }),
+        );
+      }
+    },
     equipSkin: (skinId) => {
       if (profile.equip(skinId) === undefined) {
         sfx.play({ id: 'equip', semitones: 0 });
@@ -185,14 +198,26 @@ let shopKey = '';
 let audioKey = '';
 
 function pushProfile(): void {
-  const { balance, ownedSkins, equippedSkin, playerName } = profile.data;
+  const { points, coins, ownedSkins, equippedSkin, playerName } = profile.data;
   // Typing a name or dragging the volume changes the profile many times a second: only redo the
   // shop and name field when what they show actually changed.
-  const key = `${balance}|${ownedSkins.join(',')}|${equippedSkin}|${playerName}`;
+  const key = `${points}|${coins}|${ownedSkins.join(',')}|${equippedSkin}|${playerName}`;
   if (key === shopKey) return;
   shopKey = key;
   view.updateProfile(
-    { balance, owned: ownedSkins, equipped: equippedSkin, skins: SKINS },
+    {
+      points,
+      coins,
+      convertibleCoins: profile.convertibleCoins,
+      pointsPerCoin: POINTS_PER_COIN,
+      owned: ownedSkins,
+      equipped: equippedSkin,
+      // Only what can be bought: M8 adds the locked rows for items earned by an achievement.
+      skins: SKINS.flatMap((skin) => {
+        const price = coinPrice(skin);
+        return price === undefined ? [] : [{ id: skin.id, price }];
+      }),
+    },
     playerName,
   );
 }
@@ -221,8 +246,19 @@ profile.onChange(() => {
 });
 pushProfile();
 applyAudio();
-// The points of a round and the campaign progress are saved the moment the round ends.
-flow.onRoundEnd((outcome) => profile.recordRound(outcome.score, flow.progress));
+// The points of a round and the campaign progress are saved the moment the round ends. This runs
+// before the end dialog is shown, so the dialog can say how many points reached the bank.
+flow.onRoundEnd((outcome) => {
+  const credit = profile.recordRound(
+    {
+      levelId: LEVELS[outcome.levelIndex]?.id ?? 0,
+      score: outcome.score,
+      won: outcome.result === 'won',
+    },
+    flow.progress,
+  );
+  view.setRoundCredit({ ...credit, replayPercent: REPLAY_BANK_PERCENT });
+});
 
 flow.onChange(() => {
   applyMusic();

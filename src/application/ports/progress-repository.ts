@@ -1,4 +1,4 @@
-import type { SaveDataV1 } from '../save-data';
+import type { SaveData } from '../save-data';
 
 /**
  * Where the player's save lives (D4). Today it is the browser's `localStorage`; an API with
@@ -9,5 +9,5 @@ export interface ProgressRepository {
   /** The stored value, or `undefined` when there is none or it cannot be read. Never throws. */
   load(): unknown;
   /** Best effort: a full or blocked storage must not break the game, so it never throws either. */
-  save(data: SaveDataV1): void;
+  save(data: SaveData): void;
 }

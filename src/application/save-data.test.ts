@@ -3,15 +3,18 @@ import { defaultSave, parseSave, type SaveRules } from './save-data';
 
 const RULES: SaveRules = {
   levelIds: [1, 2, 3],
+  goalByLevel: { 1: 100, 2: 120, 3: 150 },
   skinIds: ['classic', 'ocean', 'gold'],
   defaultSkin: 'classic',
 };
 
 const valid = {
-  version: 1,
+  version: 2,
   playerName: 'Maria',
-  balance: 120,
+  points: 120,
+  coins: 7,
   highestUnlockedLevel: 2,
+  clearedLevels: [1],
   bestScoreByLevel: { 1: 150, 2: 80 },
   ownedSkins: ['classic', 'ocean'],
   equippedSkin: 'ocean',
@@ -19,12 +22,14 @@ const valid = {
 };
 
 describe('defaultSave', () => {
-  it('is a new player: level 1, no points, the free skin, sound on, no language chosen', () => {
+  it('is a new player: level 1, no points or coins, the free skin, sound on, no language', () => {
     expect(defaultSave(RULES)).toEqual({
-      version: 1,
+      version: 2,
       playerName: '',
-      balance: 0,
+      points: 0,
+      coins: 0,
       highestUnlockedLevel: 1,
+      clearedLevels: [],
       bestScoreByLevel: {},
       ownedSkins: ['classic'],
       equippedSkin: 'classic',
@@ -46,25 +51,34 @@ describe('parseSave', () => {
     expect(parseSave(raw, RULES)).toEqual(defaultSave(RULES));
   });
 
-  it('falls back to the default for an unknown version (no migration exists yet)', () => {
-    expect(parseSave({ ...valid, version: 2 }, RULES)).toEqual(defaultSave(RULES));
+  it('falls back to the default for an unknown version', () => {
+    expect(parseSave({ ...valid, version: 3 }, RULES)).toEqual(defaultSave(RULES));
     expect(parseSave({ ...valid, version: undefined }, RULES)).toEqual(defaultSave(RULES));
   });
 
   it('repairs one bad field without losing the others', () => {
-    const result = parseSave({ ...valid, balance: -5, highestUnlockedLevel: 'x' }, RULES);
-    expect(result.balance).toBe(0);
+    const result = parseSave({ ...valid, points: -5, highestUnlockedLevel: 'x' }, RULES);
+    expect(result.points).toBe(0);
+    expect(result.coins).toBe(7);
     expect(result.highestUnlockedLevel).toBe(1);
     expect(result.ownedSkins).toEqual(['classic', 'ocean']);
     expect(result.playerName).toBe('Maria');
   });
 
   it.each([-1, 1.5, Number.NaN, Infinity, 2e9, '100', null])(
-    'rejects the balance %j',
-    (balance) => {
-      expect(parseSave({ ...valid, balance }, RULES).balance).toBe(0);
+    'rejects the points and coins %j',
+    (value) => {
+      const result = parseSave({ ...valid, points: value, coins: value }, RULES);
+      expect(result.points).toBe(0);
+      expect(result.coins).toBe(0);
     },
   );
+
+  it('keeps only cleared levels that exist, once each, in campaign order', () => {
+    const result = parseSave({ ...valid, clearedLevels: [3, 'x', 99, 1, 3, 1.5] }, RULES);
+    expect(result.clearedLevels).toEqual([1, 3]);
+    expect(parseSave({ ...valid, clearedLevels: 'all' }, RULES).clearedLevels).toEqual([]);
+  });
 
   it('rejects an unlocked level that does not exist', () => {
     expect(parseSave({ ...valid, highestUnlockedLevel: 99 }, RULES).highestUnlockedLevel).toBe(1);
@@ -120,8 +134,60 @@ describe('parseSave', () => {
   });
 
   it('does not trust inherited or polluting keys', () => {
-    const raw = JSON.parse('{"version":1,"__proto__":{"balance":999},"balance":5}');
-    expect(parseSave(raw, RULES).balance).toBe(5);
-    expect(({} as Record<string, unknown>)['balance']).toBeUndefined();
+    const raw = JSON.parse('{"version":2,"__proto__":{"points":999},"points":5}');
+    expect(parseSave(raw, RULES).points).toBe(5);
+    expect(({} as Record<string, unknown>)['points']).toBeUndefined();
+  });
+});
+
+describe('parseSave: migrating a version 1 save', () => {
+  const v1 = {
+    version: 1,
+    playerName: 'Maria',
+    balance: 120,
+    highestUnlockedLevel: 2,
+    bestScoreByLevel: { 1: 150, 2: 80 },
+    ownedSkins: ['classic', 'ocean'],
+    equippedSkin: 'ocean',
+    settings: { muted: true, music: false, volume: 0.5, locale: 'pt-BR' },
+  };
+
+  it('turns the old balance into the point bank, starts with no coins and keeps the rest', () => {
+    expect(parseSave(v1, RULES)).toEqual({
+      version: 2,
+      playerName: 'Maria',
+      points: 120,
+      coins: 0,
+      highestUnlockedLevel: 2,
+      clearedLevels: [1],
+      bestScoreByLevel: { 1: 150, 2: 80 },
+      ownedSkins: ['classic', 'ocean'],
+      equippedSkin: 'ocean',
+      settings: { muted: true, music: false, volume: 0.5, locale: 'pt-BR' },
+    });
+  });
+
+  it('counts as cleared every level below the frontier, which a win is what moved', () => {
+    expect(parseSave({ ...v1, highestUnlockedLevel: 3 }, RULES).clearedLevels).toEqual([1, 2]);
+    expect(
+      parseSave({ ...v1, highestUnlockedLevel: 1, bestScoreByLevel: {} }, RULES).clearedLevels,
+    ).toEqual([]);
+  });
+
+  it('counts the last level as cleared when its best score reached the goal (it never moves the frontier)', () => {
+    const atTheEnd = { ...v1, highestUnlockedLevel: 3, bestScoreByLevel: { 3: 150 } };
+    expect(parseSave(atTheEnd, RULES).clearedLevels).toEqual([1, 2, 3]);
+    const lostThere = { ...v1, highestUnlockedLevel: 3, bestScoreByLevel: { 3: 149 } };
+    expect(parseSave(lostThere, RULES).clearedLevels).toEqual([1, 2]);
+  });
+
+  it('does not read points, coins or cleared levels from a version 1 save', () => {
+    const odd = { ...v1, points: 999, coins: 999, clearedLevels: [3] };
+    const result = parseSave(odd, RULES);
+    expect(result).toMatchObject({ points: 120, coins: 0, clearedLevels: [1] });
+  });
+
+  it('repairs a bad balance like any other field', () => {
+    expect(parseSave({ ...v1, balance: 'lots' }, RULES).points).toBe(0);
   });
 });

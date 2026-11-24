@@ -1,58 +1,66 @@
 import { describe, expect, it } from 'vitest';
-import type { SkinCatalog } from '../entities/skin';
-import { buySkin, equipSkin, type ShopState } from './shop';
+import type { ItemCatalog } from '../entities/item';
+import { buyItem, equipSkin, type ShopState } from './shop';
 
-const CATALOG: SkinCatalog = [
-  { id: 'classic', price: 0 },
-  { id: 'ocean', price: 75 },
-  { id: 'gold', price: 750 },
+const CATALOG: ItemCatalog = [
+  { id: 'classic', kind: 'skin', acquire: { coins: 0 } },
+  { id: 'ocean', kind: 'skin', acquire: { coins: 40 } },
+  { id: 'gold', kind: 'skin', acquire: { coins: 600 } },
+  { id: 'trophy', kind: 'skin', acquire: { achievement: 'first-hit' } },
 ];
 
 const state = (overrides: Partial<ShopState> = {}): ShopState => ({
-  balance: 100,
+  coins: 100,
   ownedSkins: ['classic'],
   equippedSkin: 'classic',
   ...overrides,
 });
 
-describe('buySkin', () => {
-  it('takes the price from the balance and adds the skin to the collection', () => {
-    const result = buySkin(state(), CATALOG, 'ocean');
+describe('buyItem', () => {
+  it('takes the price in coins and adds the skin to the collection', () => {
+    const result = buyItem(state(), CATALOG, 'ocean');
     expect(result).toEqual({
       ok: true,
-      state: { balance: 25, ownedSkins: ['classic', 'ocean'], equippedSkin: 'classic' },
+      state: { coins: 60, ownedSkins: ['classic', 'ocean'], equippedSkin: 'classic' },
     });
   });
 
   it('does not equip what was just bought: that is a separate choice', () => {
-    const result = buySkin(state(), CATALOG, 'ocean');
+    const result = buyItem(state(), CATALOG, 'ocean');
     expect(result.ok && result.state.equippedSkin).toBe('classic');
   });
 
-  it('allows spending the balance down to exactly zero', () => {
-    const result = buySkin(state({ balance: 75 }), CATALOG, 'ocean');
-    expect(result.ok && result.state.balance).toBe(0);
+  it('allows spending the coins down to exactly zero', () => {
+    const result = buyItem(state({ coins: 40 }), CATALOG, 'ocean');
+    expect(result.ok && result.state.coins).toBe(0);
   });
 
-  it('refuses when the balance is short, changing nothing', () => {
-    expect(buySkin(state({ balance: 74 }), CATALOG, 'ocean')).toEqual({
+  it('refuses when the coins are short, changing nothing', () => {
+    expect(buyItem(state({ coins: 39 }), CATALOG, 'ocean')).toEqual({
       ok: false,
-      reason: 'insufficient-balance',
+      reason: 'insufficient-coins',
     });
   });
 
   it('refuses a skin the player already owns, without charging again', () => {
     const owned = state({ ownedSkins: ['classic', 'ocean'] });
-    expect(buySkin(owned, CATALOG, 'ocean')).toEqual({ ok: false, reason: 'already-owned' });
+    expect(buyItem(owned, CATALOG, 'ocean')).toEqual({ ok: false, reason: 'already-owned' });
+  });
+
+  it('refuses an item earned by an achievement: it is never for sale', () => {
+    expect(buyItem(state({ coins: 9999 }), CATALOG, 'trophy')).toEqual({
+      ok: false,
+      reason: 'not-for-sale',
+    });
   });
 
   it('refuses a skin that is not in the catalog', () => {
-    expect(buySkin(state(), CATALOG, 'unicorn')).toEqual({ ok: false, reason: 'unknown-skin' });
+    expect(buyItem(state(), CATALOG, 'unicorn')).toEqual({ ok: false, reason: 'unknown-item' });
   });
 
   it('does not mutate the state it was given', () => {
     const before = state();
-    buySkin(before, CATALOG, 'ocean');
+    buyItem(before, CATALOG, 'ocean');
     expect(before).toEqual(state());
   });
 });
@@ -72,6 +80,6 @@ describe('equipSkin', () => {
 
   it('refuses an unknown skin even if a corrupted save claims to own it', () => {
     const odd = state({ ownedSkins: ['classic', 'unicorn'] });
-    expect(equipSkin(odd, CATALOG, 'unicorn')).toEqual({ ok: false, reason: 'unknown-skin' });
+    expect(equipSkin(odd, CATALOG, 'unicorn')).toEqual({ ok: false, reason: 'unknown-item' });
   });
 });

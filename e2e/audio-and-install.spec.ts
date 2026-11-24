@@ -67,7 +67,7 @@ test.describe('audio settings', () => {
 });
 
 test.describe('end of round summary', () => {
-  test('says what the round added to the balance and the best score of the level', async ({
+  test('says what the round added to the point bank and the best score of the level', async ({
     game,
     page,
   }) => {
@@ -78,7 +78,7 @@ test.describe('end of round summary', () => {
     }
     await game.expectScreen('ended');
     const text = game.overlay('ended').locator('.overlay__text');
-    await expect(text).toContainText('Added to your balance: 0 points');
+    await expect(text).toContainText('Added to your point bank: 0 points');
     await expect(text).toContainText('Best on this level: 0 points');
   });
 });
