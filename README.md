@@ -4,7 +4,7 @@
 
 **PT-BR** — Minigame 8 bits de navegador: arremesse chinelos em caranguejos e siris que cruzam praias e manguezais, ganhe pontos, avance por níveis mais difíceis e gaste os pontos em skins de chinelo. Disponível em português (Brasil) e inglês. O progresso é salvo localmente no navegador (sem conta).
 
-> Status: **M2 (first playable level)** — one level is playable end to end, portrait layout for phones (mouse, touch and keyboard; English and Portuguese; sound effects). Campaign, shop and saved progress come next. / um nível já é jogável de ponta a ponta (mouse, toque e teclado; português e inglês; efeitos sonoros). Campanha, loja e progresso salvo vêm a seguir.
+> Status: **M5 (polish) is live** — 12-level campaign over four biomes, shop with 7 skins, local save (name, progress, settings), music and effects, installable, portrait layout for phones, English and Portuguese. Next on the roadmap: shared top-10 scoreboard, coins, achievements and flip flop powers (see the ADR). / a campanha de 12 níveis em quatro biomas, a loja com 7 skins, o save local (nome, progresso e ajustes), música e efeitos, o app instalável e o layout em pé para celular estão no ar, em português e inglês. A seguir: placar top 10, moedas, conquistas e poderes dos chinelos (ver o ADR).
 
 ## How to play / Como jogar
 
