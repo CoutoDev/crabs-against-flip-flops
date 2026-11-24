@@ -37,6 +37,8 @@ O navegador não executa `.ts`, então o site é **compilado** pelo Vite e só o
 
 Clean-architecture layers (`domain` → `application` → `infrastructure`/`ui`), fixed-timestep simulation, 180×320 portrait pixel canvas (fills a phone held upright, centered on desktop), chiptune audio synthesized with WebAudio, levels and skins as data, `localStorage` behind a repository port. Full rationale and roadmap in [`docs/adr/0001-arquitetura.md`](docs/adr/0001-arquitetura.md).
 
+Analytics (Google Tag Manager) only loads after the player accepts it; see [`docs/analytics.md`](docs/analytics.md) for the consent rules, the events and what is left to configure.
+
 ## Notes
 
 Sprites are original; "flip flop" here is a generic item and the project is not affiliated with or endorsed by any footwear brand.

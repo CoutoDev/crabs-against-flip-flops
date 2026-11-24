@@ -101,6 +101,25 @@ export const en = {
     'Game field: crabs scuttle along the mangrove mud. Throw flip flops at them.',
   'canvas.label.night':
     'Game field: crabs scuttle across the beach at night. Throw flip flops at them.',
+  'consent.title': 'Your privacy',
+  'consent.text':
+    'May we count visits and how the levels are played, to make the game better? This uses Google Analytics cookies. Your name is never sent.',
+  'consent.accept': 'Accept',
+  'consent.reject': 'Reject',
+  'consent.cancel': 'Cancel',
+  'consent.choices': 'Privacy choices',
+  'consent.details': 'More details',
+  'consent.detail.what':
+    'What: the pages visited and anonymous play data (level, result, score, language). Never your name.',
+  'consent.detail.who':
+    'Who: Google receives it, with your IP address, and may process it outside your country.',
+  'consent.detail.cookies': 'Cookies: Google Analytics sets cookies that last up to 2 years.',
+  'consent.detail.change':
+    'You can change your mind any time with "Privacy choices" on the main menu. Your progress is saved on this device either way.',
+  'consent.status.granted': 'Right now: allowed',
+  'consent.status.denied': 'Right now: not allowed',
+  'consent.signal':
+    'Your browser sent a privacy signal (Global Privacy Control), so analytics stays off unless you accept here.',
   'announce.milestone': 'Milestone: {milestone}',
 } as const satisfies Record<string, Message>;
 

@@ -1,7 +1,20 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-/** Where the game keeps its save (src/infrastructure/storage). */
+/** Where the game keeps its save and the analytics choice (src/infrastructure/storage). */
 const SAVE_KEY = 'crabs-against-flip-flops:save';
+const CONSENT_KEY = 'crabs-against-flip-flops:consent';
+
+/**
+ * The analytics choice a test starts with. Most specs are not about privacy, so by default the
+ * visitor has already refused (the banner would otherwise cover the menu); `unset` is a first visit.
+ */
+export type ConsentSeed = 'granted' | 'denied' | 'unset';
+
+export interface OpenOptions {
+  readonly consent?: ConsentSeed;
+  /** The browser sends the Global Privacy Control signal. */
+  readonly privacySignal?: boolean;
+}
 
 export type ScreenName =
   'menu' | 'shop' | 'audio' | 'language' | 'briefing' | 'playing' | 'paused' | 'ended';
@@ -29,6 +42,8 @@ export class GamePage {
   readonly live: Locator;
   /** Console and page errors seen since `open()`; specs assert it is empty. */
   problems: string[] = [];
+  /** Requests the page made to Google Tag Manager (answered with an empty script). */
+  analyticsRequests: string[] = [];
 
   constructor(readonly page: Page) {
     this.stage = page.locator('.stage');
@@ -37,7 +52,26 @@ export class GamePage {
   }
 
   /** Opens the game with a spy on the Web Audio API and fails the test on any page error. */
-  async open(): Promise<void> {
+  async open({ consent = 'denied', privacySignal = false }: OpenOptions = {}): Promise<void> {
+    if (consent !== 'unset') {
+      // Written only when absent, so a reload keeps whatever the player chose meanwhile.
+      await this.page.addInitScript(
+        ([key, analytics]) => {
+          if (window.localStorage.getItem(key as string) === null) {
+            window.localStorage.setItem(
+              key as string,
+              JSON.stringify({ version: 1, analytics, decidedAt: Date.now() }),
+            );
+          }
+        },
+        [CONSENT_KEY, consent === 'granted'],
+      );
+    }
+    if (privacySignal) {
+      await this.page.addInitScript(() => {
+        Object.defineProperty(navigator, 'globalPrivacyControl', { value: true });
+      });
+    }
     await this.page.addInitScript(() => {
       const spy = { contexts: 0, oscillators: 0 };
       Object.defineProperty(window, '__audioSpy', { value: spy });
@@ -52,6 +86,13 @@ export class GamePage {
           return super.createOscillator();
         }
       };
+    });
+    // Third-party analytics never runs in the tests: the request is answered with an empty script,
+    // so the suite works offline and a blocked tag cannot fail it. The page still asks for it.
+    this.analyticsRequests = [];
+    await this.page.route('https://www.googletagmanager.com/**', (route) => {
+      this.analyticsRequests.push(route.request().url());
+      return route.fulfill({ contentType: 'application/javascript', body: '' });
     });
     const problems: string[] = [];
     this.page.on('pageerror', (error) => problems.push(`pageerror: ${error.message}`));
@@ -137,6 +178,31 @@ export class GamePage {
 
   volume(): Locator {
     return this.page.locator('#audio-volume');
+  }
+
+  /** The analytics data layer, with the gtag commands (`arguments` objects) turned into arrays. */
+  async dataLayer(): Promise<unknown[]> {
+    return this.page.evaluate(() =>
+      ((window as unknown as { dataLayer?: unknown[] }).dataLayer ?? []).map((entry) =>
+        Object.prototype.toString.call(entry) === '[object Arguments]'
+          ? Array.from(entry as ArrayLike<unknown>)
+          : entry,
+      ),
+    );
+  }
+
+  /** The data layer events (not the gtag commands) with the given name, in order. */
+  async events(name: string): Promise<Record<string, unknown>[]> {
+    const layer = await this.dataLayer();
+    return layer.filter(
+      (entry): entry is Record<string, unknown> =>
+        !Array.isArray(entry) && (entry as { event?: unknown }).event === name,
+    );
+  }
+
+  /** The dialog that asks about analytics. */
+  consentDialog(): Locator {
+    return this.page.locator('[data-overlay="consent"]');
   }
 
   /** From the menu: opens the briefing of the selected level. */

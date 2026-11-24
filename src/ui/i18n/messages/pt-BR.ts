@@ -88,5 +88,24 @@ export const ptBR: Readonly<Record<MessageKey, Message>> = {
     'Campo do jogo: caranguejos correm pela lama do manguezal. Arremesse chinelos neles.',
   'canvas.label.night':
     'Campo do jogo: caranguejos correm pela praia à noite. Arremesse chinelos neles.',
+  'consent.title': 'Sua privacidade',
+  'consent.text':
+    'Podemos contar as visitas e como as fases são jogadas, para melhorar o jogo? Isso usa cookies do Google Analytics. Seu nome nunca é enviado.',
+  'consent.accept': 'Aceitar',
+  'consent.reject': 'Recusar',
+  'consent.cancel': 'Cancelar',
+  'consent.choices': 'Escolhas de privacidade',
+  'consent.details': 'Mais detalhes',
+  'consent.detail.what':
+    'O quê: as páginas visitadas e dados anônimos de jogo (fase, resultado, pontos, idioma). Nunca o seu nome.',
+  'consent.detail.who':
+    'Quem: o Google recebe, junto com o seu endereço IP, e pode tratar fora do seu país.',
+  'consent.detail.cookies': 'Cookies: o Google Analytics cria cookies que duram até 2 anos.',
+  'consent.detail.change':
+    'Você pode mudar de ideia quando quiser em "Escolhas de privacidade" no menu principal. O seu progresso fica salvo neste aparelho de qualquer jeito.',
+  'consent.status.granted': 'Agora: permitido',
+  'consent.status.denied': 'Agora: não permitido',
+  'consent.signal':
+    'Seu navegador enviou um sinal de privacidade (Global Privacy Control), então a análise fica desligada a menos que você aceite aqui.',
   'announce.milestone': 'Marco: {milestone}',
 };
