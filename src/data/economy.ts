@@ -4,8 +4,8 @@
  * the shop charges. Both numbers can be tuned without touching any rule.
  */
 
-/** 25 points make 1 coin. Conversion is one way: coins never turn back into points. */
-export const POINTS_PER_COIN = 25;
+/** X points make 1 coin. Conversion is one way: coins never turn back into points. */
+export const POINTS_PER_COIN = 5;
 
 /**
  * Share of a round's points that reach the point bank when the level was already cleared before
