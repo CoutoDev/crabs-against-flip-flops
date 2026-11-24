@@ -1,4 +1,6 @@
 import './style.css';
+import { AnalyticsRecorder } from './application/analytics-recorder';
+import { Consent } from './application/consent';
 import { EventBus } from './application/event-bus';
 import { musicFor } from './application/music-policy';
 import { RepaintGate } from './application/repaint-gate';
@@ -12,6 +14,10 @@ import { FIELD_HEIGHT_PX, FIELD_WIDTH_PX } from './domain/constants';
 import type { DomainEvent } from './domain/events';
 import { createRng } from './domain/rng';
 import { bindSfx } from './infrastructure/audio/bind-sfx';
+import {
+  createBrowserAnalytics,
+  privacySignalOn,
+} from './infrastructure/analytics/browser-analytics';
 import { WebAudioMusic } from './infrastructure/audio/web-audio-music';
 import { WebAudioSfx } from './infrastructure/audio/web-audio-sfx';
 import { startGameLoop } from './infrastructure/browser/game-loop';
@@ -21,6 +27,7 @@ import { Effects } from './infrastructure/render/effects';
 import { Framebuffer } from './infrastructure/render/framebuffer';
 import { Scene } from './infrastructure/render/scene';
 import { slotsForSkin, trailForSkin } from './infrastructure/render/skin-slots';
+import { LocalStorageConsentStore } from './infrastructure/storage/local-storage-consent-store';
 import {
   browserStorage,
   LocalStorageProgressRepository,
@@ -55,6 +62,15 @@ const profile = new Profile(
     return () => clearTimeout(id);
   },
 );
+
+/** The Tag Manager container. Nothing is loaded from it until the player accepts analytics. */
+const GTM_CONTAINER_ID = 'GTM-MCWMM5C6';
+const consent = new Consent({
+  store: new LocalStorageConsentStore(browserStorage),
+  now: () => Date.now(),
+  privacySignal: privacySignalOn(),
+});
+const analytics = createBrowserAnalytics(GTM_CONTAINER_ID);
 const bus = new EventBus<DomainEvent>();
 const flow = new GameFlow({
   progress: profile.progress,
@@ -63,6 +79,11 @@ const flow = new GameFlow({
   newSeed: () => Math.floor(Math.random() * 0x100000000),
   bus,
 });
+const recorder = new AnalyticsRecorder(
+  flow,
+  analytics,
+  LEVELS.map((level) => ({ id: level.id, biome: level.biome })),
+);
 const controls = new PlayerControls(flow);
 const sfx = new WebAudioSfx();
 const music = new WebAudioMusic(() => sfx.graph);
@@ -123,12 +144,14 @@ const view = new GameView(
     closeShop: () => flow.closeShop(),
     buySkin: (skinId) => {
       if (profile.buy(skinId) === undefined) {
+        recorder.skinBought(skinId, SKINS.find((skin) => skin.id === skinId)?.price ?? 0);
         sfx.play({ id: 'buy', semitones: 0 });
         view.announce(translator.t('shop.bought', { name: view.skinLabel(skinId) }));
       }
     },
     equipSkin: (skinId) => {
       if (profile.equip(skinId) === undefined) {
+        recorder.skinEquipped(skinId);
         sfx.play({ id: 'equip', semitones: 0 });
         view.announce(translator.t('shop.nowUsing', { name: view.skinLabel(skinId) }));
       }
@@ -141,16 +164,26 @@ const view = new GameView(
     setLocale: (locale) => {
       translator = createTranslator(locale);
       profile.setLocale(locale);
+      recorder.languageChanged(locale);
       hudKey = '';
       repaint.invalidate(); // the HUD texts change, and nothing else would trigger a frame
       view.setTranslator(translator);
       refit();
     },
-    toggleSound: () => profile.setMuted(!profile.data.settings.muted),
-    toggleMusic: () => profile.setMusic(!profile.data.settings.music),
+    toggleSound: () => {
+      profile.setMuted(!profile.data.settings.muted);
+      recorder.audioChanged('sound', profile.data.settings.muted ? 0 : 1);
+    },
+    toggleMusic: () => {
+      profile.setMusic(!profile.data.settings.music);
+      recorder.audioChanged('music', profile.data.settings.music ? 1 : 0);
+    },
+    acceptConsent: () => consent.accept(),
+    rejectConsent: () => consent.reject(),
     setVolume: (volume) => profile.setVolume(volume),
     commitVolume: () => {
       profile.flush();
+      recorder.audioChanged('volume', Math.round(profile.data.settings.volume * 100));
       sfx.play({ id: 'click', semitones: 0 }); // lets the player hear the volume just chosen
     },
   },
@@ -270,8 +303,25 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('resize', refit);
 view.onLayoutChange(refit);
 
+/** Analytics follows the player's choice. Withdrawing it after Tag Manager loaded needs a reload. */
+function applyConsent(): void {
+  analytics.setConsent(consent.status === 'granted');
+  view.setConsent({ status: consent.status, blockedBySignal: consent.blockedBySignal });
+}
+consent.onChange(() => {
+  const wasLoaded = analytics.loaded;
+  applyConsent();
+  if (wasLoaded && consent.status !== 'granted') {
+    // A loaded container cannot be unloaded: start over without it (the progress is saved first).
+    profile.flush();
+    window.location.reload();
+  }
+});
+
 view.setTranslator(translator);
+applyConsent();
 view.showScreen(flow.screen, flow.outcome, campaignView());
+if (consent.needsPrompt) view.promptConsent();
 applyMusic();
 refit();
 

@@ -6,6 +6,7 @@ import { canvasLabelKey, crabNameKey, levelName } from './campaign-text';
 import { button, el } from './dom';
 import type { HudModel } from './hud-model';
 import type { Translator } from './i18n/translator';
+import { ConsentBanner, type ConsentState } from './consent-view';
 import { icon, type IconName } from './icons';
 import { AudioPanel, LanguagePanel, tile, type AudioSettings, type Tile } from './settings-view';
 import { NameField, ShopList, skinName, type ShopModel } from './shop-view';
@@ -25,6 +26,8 @@ export interface ViewActions {
   openLanguage(): void;
   /** Back from the audio or language screen. */
   closeSettings(): void;
+  acceptConsent(): void;
+  rejectConsent(): void;
   setLocale(locale: Locale): void;
   toggleSound(): void;
   toggleMusic(): void;
@@ -270,6 +273,11 @@ export class GameView {
   private readonly languageScreen: Overlay;
   private readonly audioPanel: AudioPanel;
   private readonly languagePanel: LanguagePanel;
+  private readonly consentBanner: ConsentBanner;
+  private readonly privacyButton: HTMLButtonElement;
+  private consentState: ConsentState = { status: 'unset', blockedBySignal: false };
+  /** True when the banner was opened by the player (it can be cancelled), not as the first prompt. */
+  private consentReopened = false;
   private readonly menuDock: Dock;
   private readonly pausedDock: Dock;
   private readonly menuTiles: Readonly<Record<'shop' | 'audio' | 'language', Tile>>;
@@ -316,6 +324,19 @@ export class GameView {
     this.menu.addExtra(this.menuDock.root);
     this.menu.addExtra(this.levelPicker.root);
     this.menu.addExtra(this.nameField.root);
+    this.privacyButton = button('link-button', () => this.openConsent(true));
+    this.menu.addExtra(this.privacyButton);
+    this.consentBanner = new ConsentBanner({
+      accept: () => {
+        actions.acceptConsent();
+        this.closeConsent();
+      },
+      reject: () => {
+        actions.rejectConsent();
+        this.closeConsent();
+      },
+      cancel: () => this.closeConsent(),
+    });
     this.shopList = new ShopList((id) => icons.skin(id), {
       buy: actions.buySkin,
       equip: actions.equipSkin,
@@ -364,6 +385,7 @@ export class GameView {
       this.ended.root,
       this.audioScreen.root,
       this.languageScreen.root,
+      this.consentBanner.root,
     );
     this.live.setAttribute('role', 'status');
     this.live.setAttribute('aria-live', 'polite');
@@ -378,6 +400,17 @@ export class GameView {
    */
   onLayoutChange(listener: () => void): void {
     new ResizeObserver(listener).observe(this.hud);
+  }
+
+  /** The analytics choice changed (or was read at the start): the banner and its texts follow. */
+  setConsent(state: ConsentState): void {
+    this.consentState = state;
+    if (this.translator !== undefined) this.consentBanner.update(this.translator, state);
+  }
+
+  /** First visit: asks before anything is measured. */
+  promptConsent(): void {
+    this.openConsent(false);
   }
 
   /** Shows the current audio settings (sound, music, volume) on the audio screen. */
@@ -398,6 +431,8 @@ export class GameView {
     this.title.textContent = t('game.title');
     this.audioPanel.update(translator, this.audio);
     this.languagePanel.update(translator);
+    this.privacyButton.textContent = t('consent.choices');
+    this.consentBanner.update(translator, this.consentState);
     this.menuTiles.shop.setCaption(t('menu.shop'));
     this.menuTiles.audio.setCaption(t('menu.audio'));
     this.menuTiles.language.setCaption(t('settings.language'));
@@ -507,6 +542,39 @@ export class GameView {
   /** The name of a skin in the current language, for announcements. */
   skinLabel(skinId: string): string {
     return this.translator === undefined ? skinId : skinName(this.translator, skinId);
+  }
+
+  private openConsent(reopened: boolean): void {
+    this.consentReopened = reopened;
+    this.consentBanner.show(reopened);
+    this.setInert(true);
+  }
+
+  private closeConsent(): void {
+    this.consentBanner.hide();
+    this.setInert(false);
+    // Back to where the player was: the button that reopened the banner, or the menu's Play.
+    if (this.screen === 'menu') {
+      if (this.consentReopened) this.privacyButton.focus({ preventScroll: true });
+      else this.menu.focusPrimary();
+    }
+  }
+
+  /** While the banner is open nothing behind it can be reached (by tab, touch or screen reader). */
+  private setInert(on: boolean): void {
+    const behind: HTMLElement[] = [
+      this.hud,
+      this.help,
+      this.canvas,
+      this.menu.root,
+      this.shop.root,
+      this.briefing.root,
+      this.paused.root,
+      this.ended.root,
+      this.audioScreen.root,
+      this.languageScreen.root,
+    ];
+    for (const node of behind) node.inert = on;
   }
 
   private renderShop(): void {
