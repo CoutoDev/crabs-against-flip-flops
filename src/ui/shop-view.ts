@@ -4,9 +4,16 @@ import type { Translator } from './i18n/translator';
 import type { MessageKey } from './i18n/messages/en';
 
 export interface ShopModel {
-  readonly balance: number;
+  /** What the shop charges. */
+  readonly coins: number;
+  /** The point bank, waiting to be converted. */
+  readonly points: number;
+  /** How many coins the whole bank is worth now (0 below one coin's worth). */
+  readonly convertibleCoins: number;
+  readonly pointsPerCoin: number;
   readonly equipped: string;
   readonly owned: readonly string[];
+  /** Prices are in coins. */
   readonly skins: readonly { readonly id: string; readonly price: number }[];
 }
 
@@ -23,6 +30,40 @@ interface ShopItem {
   readonly name: HTMLElement;
   readonly price: HTMLElement;
   readonly action: HTMLButtonElement;
+}
+
+/**
+ * The point bank and the button that turns it into coins (D35). The button is never really
+ * `disabled`: a disabled button that was just pressed loses the keyboard focus, and converting
+ * everything is exactly what empties the bank. It says "disabled" with `aria-disabled` instead.
+ */
+export class BankPanel {
+  readonly root = el('section', 'bank');
+  private readonly points = el('p', 'bank__points');
+  private readonly worth = el('p', 'bank__worth');
+  private readonly convert: HTMLButtonElement;
+  private canConvert = false;
+
+  constructor(onConvert: () => void) {
+    this.convert = button('control bank__convert', () => {
+      if (this.canConvert) onConvert();
+    });
+    this.root.append(this.points, this.worth, this.convert);
+  }
+
+  update(translator: Translator, model: ShopModel): void {
+    const { t } = translator;
+    this.points.textContent = t('shop.bank', {
+      points: t('score.points', { count: model.points }),
+    });
+    this.worth.textContent = t('shop.bankWorth', {
+      coins: t('score.coins', { count: model.convertibleCoins }),
+      rate: model.pointsPerCoin,
+    });
+    this.canConvert = model.convertibleCoins > 0;
+    this.convert.textContent = t('shop.convert');
+    this.convert.setAttribute('aria-disabled', String(!this.canConvert));
+  }
 }
 
 /**
@@ -50,10 +91,10 @@ export class ShopList {
 
       item.name.textContent = name;
       item.price.textContent =
-        skin.price === 0 ? t('shop.free') : t('score.points', { count: skin.price });
+        skin.price === 0 ? t('shop.free') : t('score.coins', { count: skin.price });
       item.action.textContent = verb;
       item.action.setAttribute('aria-label', t('shop.action', { action: verb, name }));
-      item.action.disabled = equipped || (!owned && model.balance < skin.price);
+      item.action.disabled = equipped || (!owned && model.coins < skin.price);
       item.action.dataset['state'] = equipped ? 'equipped' : owned ? 'owned' : 'for-sale';
     }
   }

@@ -1,10 +1,12 @@
 import { expect, test } from './support/fixtures';
 
 const save = (overrides: Record<string, unknown> = {}) => ({
-  version: 1,
+  version: 2,
   playerName: '',
-  balance: 0,
+  points: 0,
+  coins: 0,
   highestUnlockedLevel: 1,
+  clearedLevels: [],
   bestScoreByLevel: {},
   ownedSkins: ['classic'],
   equippedSkin: 'classic',
@@ -40,22 +42,30 @@ test.describe('player name', () => {
 });
 
 test.describe('shop', () => {
-  test('shows what the player can afford and buys and equips a skin', async ({ game, page }) => {
-    await game.seedSave(save({ balance: 200 }));
+  const balance = (game: { overlay(name: 'shop'): import('@playwright/test').Locator }) =>
+    game.overlay('shop').locator('.overlay__text');
+
+  test('shows what the player can afford and buys and equips a skin with coins', async ({
+    game,
+    page,
+  }) => {
+    await game.seedSave(save({ coins: 100 }));
     await page.getByRole('button', { name: 'Shop' }).click();
     await game.expectScreen('shop');
-    await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('You have 200 points');
+    await expect(balance(game)).toHaveText('You have 100 coins');
 
     const row = (id: string) => page.locator(`[data-skin="${id}"]`);
     await expect(row('classic').getByRole('button')).toHaveText('In use');
     await expect(row('classic').getByRole('button')).toBeDisabled();
     await expect(row('ocean').getByRole('button')).toBeEnabled();
-    await expect(row('ocean').locator('.skins__price')).toHaveText('75 points');
-    await expect(row('gold').getByRole('button')).toBeDisabled(); // 750 points: out of reach
+    await expect(row('ocean').locator('.skins__price')).toHaveText('40 coins');
+    await expect(row('lime').getByRole('button')).toBeEnabled(); // 80 coins
+    await expect(row('pink').getByRole('button')).toBeDisabled(); // 200 coins: out of reach
+    await expect(row('gold').getByRole('button')).toBeDisabled(); // 600 coins: out of reach
 
     const buy = row('ocean').getByRole('button');
     await buy.click();
-    await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('You have 125 points');
+    await expect(balance(game)).toHaveText('You have 60 coins');
     await expect(buy).toHaveText('Use');
     await expect(buy).toBeFocused(); // the pressed button keeps the focus while it changes
     expect(await game.liveText()).toBe('Ocean bought');
@@ -67,8 +77,71 @@ test.describe('shop', () => {
 
     await game.reload();
     await page.getByRole('button', { name: 'Shop' }).click();
-    await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('You have 125 points');
+    await expect(balance(game)).toHaveText('You have 60 coins');
     await expect(row('ocean').getByRole('button')).toHaveText('In use');
+  });
+
+  test('points alone buy nothing: they have to be converted into coins first', async ({
+    game,
+    page,
+  }) => {
+    await game.seedSave(save({ points: 5000, coins: 0 }));
+    await page.getByRole('button', { name: 'Shop' }).click();
+    await expect(balance(game)).toHaveText('You have 0 coins');
+    await expect(page.locator('[data-skin="ocean"]').getByRole('button')).toBeDisabled();
+  });
+
+  test('converts the point bank into coins, keeping what does not make a coin', async ({
+    game,
+    page,
+  }) => {
+    await game.seedSave(save({ points: 203, coins: 1 }));
+    await page.getByRole('button', { name: 'Shop' }).click();
+    const bank = game.overlay('shop').locator('.bank');
+    await expect(bank.locator('.bank__points')).toHaveText('Bank: 203 points');
+    await expect(bank.locator('.bank__worth')).toHaveText('Worth 40 coins · 5 points = 1 coin');
+
+    const convert = bank.getByRole('button', { name: 'Convert all' });
+    await expect(convert).toHaveAttribute('aria-disabled', 'false');
+    await convert.click({ force: true }); // a press on it does nothing
+    await expect(balance(game)).toHaveText('You have 41 coins');
+    await expect(bank.locator('.bank__points')).toHaveText('Bank: 3 points');
+    await expect(bank.locator('.bank__worth')).toHaveText('Worth 0 coins · 5 points = 1 coin');
+    expect(await game.liveText()).toBe('Converted: 40 coins added');
+
+    // Nothing left to convert: the button says so but keeps the keyboard focus.
+    await expect(convert).toHaveAttribute('aria-disabled', 'true');
+    await expect(convert).toBeFocused();
+    await convert.click({ force: true }); // a press on it does nothing
+    await expect(balance(game)).toHaveText('You have 41 coins');
+
+    // The coins are then spent in the shop, and all of it survives a reload.
+    await page.locator('[data-skin="ocean"]').getByRole('button').click();
+    await expect(balance(game)).toHaveText('You have 1 coin');
+    await game.reload();
+    await page.getByRole('button', { name: 'Shop' }).click();
+    await expect(bank.locator('.bank__points')).toHaveText('Bank: 3 points');
+    await expect(balance(game)).toHaveText('You have 1 coin');
+  });
+
+  test('keeps the points of an older save: the old balance becomes the point bank', async ({
+    game,
+    page,
+  }) => {
+    await game.seedSave({
+      version: 1,
+      playerName: 'Ana',
+      balance: 200,
+      highestUnlockedLevel: 2,
+      bestScoreByLevel: { 1: 130 },
+      ownedSkins: ['classic', 'ocean'],
+      equippedSkin: 'ocean',
+      settings: { muted: false, volume: 1, locale: null },
+    });
+    await page.getByRole('button', { name: 'Shop' }).click();
+    await expect(balance(game)).toHaveText('You have 0 coins');
+    await expect(game.overlay('shop').locator('.bank__points')).toHaveText('Bank: 200 points');
+    await expect(page.locator('[data-skin="ocean"]').getByRole('button')).toHaveText('In use');
   });
 
   test('the picture of each skin has its own colors', async ({ game, page }) => {
@@ -97,15 +170,20 @@ test.describe('shop', () => {
 
   test('is in Portuguese too', async ({ game, page }) => {
     await game.seedSave(
-      save({ balance: 5, settings: { muted: false, volume: 1, locale: 'pt-BR' } }),
+      save({ points: 12, coins: 1, settings: { muted: false, volume: 1, locale: 'pt-BR' } }),
     );
     await page.getByRole('button', { name: 'Loja' }).click();
     await expect(game.overlay('shop').locator('.overlay__title')).toHaveText('Loja de chinelos');
-    await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('Você tem 5 pontos');
+    await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('Você tem 1 moeda');
+    await expect(game.overlay('shop').locator('.bank__points')).toHaveText('Banco: 12 pontos');
+    await expect(game.overlay('shop').locator('.bank__worth')).toHaveText(
+      'Vale 2 moedas · 5 pontos = 1 moeda',
+    );
+    await expect(page.locator('[data-skin="ocean"] .skins__price')).toHaveText('40 moedas');
     await expect(page.locator('[data-skin="ocean"] .skins__name')).toHaveText('Oceano');
   });
 
-  test('the points of a round go to the balance, win or lose', async ({ game, page }) => {
+  test('the points of a round go to the point bank, win or lose', async ({ game, page }) => {
     test.setTimeout(90_000);
     await game.play();
     await game.playRoundWithBot();
@@ -113,12 +191,35 @@ test.describe('shop', () => {
     const summary = await game.overlay('ended').locator('.overlay__text').innerText();
     const score = Number(/Score (\d+)/.exec(summary)?.[1]);
     expect(score).toBeGreaterThan(0);
+    expect(summary).toContain(`Added to your point bank: ${score} points`);
 
     await page.getByRole('button', { name: 'Main menu' }).click();
     await page.getByRole('button', { name: 'Shop' }).click();
-    await expect(game.overlay('shop').locator('.overlay__text')).toHaveText(
-      `You have ${score} points`,
+    await expect(game.overlay('shop').locator('.bank__points')).toHaveText(`Bank: ${score} points`);
+    await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('You have 0 coins');
+  });
+
+  test('a level that was already cleared sends only half of the points to the bank', async ({
+    game,
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await game.seedSave(save({ highestUnlockedLevel: 2, clearedLevels: [1] }));
+    await page.locator('.levels__group button').first().click(); // level 1, already cleared
+    await game.play();
+    await game.playRoundWithBot();
+    await game.expectScreen('ended');
+    const summary = await game.overlay('ended').locator('.overlay__text').innerText();
+    const score = Number(/Score (\d+)/.exec(summary)?.[1]);
+    expect(score).toBeGreaterThan(0);
+    const half = Math.floor(score / 2);
+    expect(summary).toContain(
+      `Level already cleared, so 50% went to your point bank: ${half} points`,
     );
+
+    await page.getByRole('button', { name: 'Main menu' }).click();
+    await page.getByRole('button', { name: 'Shop' }).click();
+    await expect(game.overlay('shop').locator('.bank__points')).toHaveText(`Bank: ${half} points`);
   });
 });
 
@@ -157,13 +258,13 @@ test.describe('saved progress and settings', () => {
       await game.expectScreen('menu');
       await expect(page.locator('.levels__group button').nth(1)).toBeDisabled();
       await page.getByRole('button', { name: 'Shop' }).click();
-      await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('You have 0 points');
+      await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('You have 0 coins');
     });
 
     test('is repaired field by field, keeping what is valid', async ({ game, page }) => {
       await game.seedSave(
         save({
-          balance: 'lots',
+          points: 'lots',
           highestUnlockedLevel: 2,
           equippedSkin: 'gold', // not owned
           ownedSkins: ['classic', 'unicorn'],
@@ -174,7 +275,8 @@ test.describe('saved progress and settings', () => {
       await expect(page.locator('.levels__group button').nth(1)).toBeEnabled();
       await page.getByRole('button', { name: 'Shop' }).click();
       await expect(page.locator('[data-skin="classic"]').getByRole('button')).toHaveText('In use');
-      await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('You have 0 points');
+      await expect(game.overlay('shop').locator('.overlay__text')).toHaveText('You have 0 coins');
+      await expect(game.overlay('shop').locator('.bank__points')).toHaveText('Bank: 0 points');
     });
   });
 });

@@ -6,7 +6,12 @@ import {
   type KeyValueStorage,
 } from './local-storage-progress-repository';
 
-const save = defaultSave({ levelIds: [1], skinIds: ['classic'], defaultSkin: 'classic' });
+const save = defaultSave({
+  levelIds: [1],
+  goalByLevel: { 1: 100 },
+  skinIds: ['classic'],
+  defaultSkin: 'classic',
+});
 
 function fakeStorage(initial: Record<string, string> = {}) {
   const items = new Map(Object.entries(initial));
@@ -26,9 +31,9 @@ describe('LocalStorageProgressRepository', () => {
   it('stores the save as JSON and reads it back', () => {
     const { storage, items } = fakeStorage();
     const repo = new LocalStorageProgressRepository(() => storage);
-    repo.save({ ...save, balance: 40 });
-    expect(JSON.parse(items.get(SAVE_KEY) ?? 'null')).toMatchObject({ version: 1, balance: 40 });
-    expect(repo.load()).toMatchObject({ balance: 40 });
+    repo.save({ ...save, points: 40 });
+    expect(JSON.parse(items.get(SAVE_KEY) ?? 'null')).toMatchObject({ version: 2, points: 40 });
+    expect(repo.load()).toMatchObject({ points: 40 });
   });
 
   it('returns undefined for corrupted JSON instead of throwing', () => {

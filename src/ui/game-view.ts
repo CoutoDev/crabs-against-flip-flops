@@ -8,7 +8,7 @@ import type { HudModel } from './hud-model';
 import type { Translator } from './i18n/translator';
 import { icon, type IconName } from './icons';
 import { AudioPanel, LanguagePanel, tile, type AudioSettings, type Tile } from './settings-view';
-import { NameField, ShopList, skinName, type ShopModel } from './shop-view';
+import { BankPanel, NameField, ShopList, skinName, type ShopModel } from './shop-view';
 
 export type { AudioSettings } from './settings-view';
 
@@ -34,11 +34,22 @@ export interface ViewActions {
   openShop(): void;
   closeShop(): void;
   buySkin(skinId: string): void;
+  /** Turns the whole point bank into coins. */
+  convertPoints(): void;
   equipSkin(skinId: string): void;
   /** Called while typing, to keep the name saved. */
   typePlayerName(name: string): void;
   /** Called when the player leaves the field; returns the cleaned name that was kept. */
   commitPlayerName(name: string): string;
+}
+
+/** What the last round put in the point bank, for the end-of-round dialog. */
+export interface RoundCreditView {
+  readonly points: number;
+  /** True when the replay rule cut it, so the dialog says why. */
+  readonly reduced: boolean;
+  /** The share that counts on a level already cleared (for the explanation). */
+  readonly replayPercent: number;
 }
 
 /** What the view needs to know about the campaign to draw the level picker and the field label. */
@@ -238,6 +249,7 @@ export class GameView {
   private origin: SettingsOrigin = 'menu';
   private hasShownScreen = false;
   private outcome: RoundOutcome | undefined;
+  private credit: RoundCreditView | undefined;
   private campaign: CampaignView | undefined;
   private lastHud: HudModel | undefined;
   private announceToggle = false;
@@ -261,6 +273,7 @@ export class GameView {
   private readonly menu: Overlay;
   private readonly shop: Overlay;
   private readonly shopList: ShopList;
+  private readonly bank: BankPanel;
   private readonly nameField: NameField;
   private readonly briefing: Overlay;
   private readonly targets: TargetList;
@@ -316,6 +329,7 @@ export class GameView {
     this.menu.addExtra(this.menuDock.root);
     this.menu.addExtra(this.levelPicker.root);
     this.menu.addExtra(this.nameField.root);
+    this.bank = new BankPanel(actions.convertPoints);
     this.shopList = new ShopList((id) => icons.skin(id), {
       buy: actions.buySkin,
       equip: actions.equipSkin,
@@ -325,6 +339,7 @@ export class GameView {
     // Back is at the top, where it is found without scrolling the list of skins.
     const shopBack = this.shop.addButton(actions.closeShop, 'back', 'control--back');
     this.shop.initialFocus = () => shopBack;
+    this.shop.addExtra(this.bank.root);
     this.shop.addExtra(this.shopList.root);
     this.targets = new TargetList(icons);
     this.briefing = new Overlay('briefing', 'game-briefing');
@@ -504,6 +519,19 @@ export class GameView {
     this.renderShop();
   }
 
+  /** Set when a round ends, before the end dialog is shown. */
+  setRoundCredit(credit: RoundCreditView): void {
+    this.credit = credit;
+  }
+
+  private creditText(outcome: RoundOutcome, t: Translator['t']): string {
+    const credit = this.credit ?? { points: outcome.score, reduced: false, replayPercent: 100 };
+    const points = t('score.points', { count: credit.points });
+    return credit.reduced
+      ? t('round.earnedReduced', { points, percent: credit.replayPercent })
+      : t('round.earned', { points });
+  }
+
   /** The name of a skin in the current language, for announcements. */
   skinLabel(skinId: string): string {
     return this.translator === undefined ? skinId : skinName(this.translator, skinId);
@@ -514,9 +542,10 @@ export class GameView {
     if (translator === undefined || shopModel === undefined) return;
     const { t } = translator;
     this.shopList.update(translator, shopModel);
+    this.bank.update(translator, shopModel);
     this.shop.setTexts(
       t('shop.title'),
-      t('shop.balance', { points: t('score.points', { count: shopModel.balance }) }),
+      t('shop.balance', { coins: t('score.coins', { count: shopModel.coins }) }),
       [t('shop.back')],
     );
   }
@@ -551,7 +580,7 @@ export class GameView {
       t(title),
       [
         t('round.summary', { score: outcome.score, hits: outcome.hits, throws: outcome.throws }),
-        t('round.earned', { points: t('score.points', { count: outcome.score }) }),
+        this.creditText(outcome, t),
         outcome.newBest
           ? t('round.newBest')
           : t('round.best', { points: t('score.points', { count: outcome.bestScore }) }),

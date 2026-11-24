@@ -83,11 +83,11 @@ body {
     box-shadow 60ms;
 }
 
-.control:hover:not(:disabled) {
+.control:hover:not(:disabled):not([aria-disabled='true']) {
   background: color-mix(in srgb, var(--deep-sea) 80%, var(--sand));
 }
 
-.control:active:not(:disabled),
+.control:active:not(:disabled):not([aria-disabled='true']),
 .tile:active,
 .switch:active,
 .language:active {
@@ -376,6 +376,39 @@ body {
 .targets__points {
   font-size: 0.75rem;
   opacity: 0.85;
+}
+
+/* Shop: the point bank and its Convert button, above the skins. */
+.bank {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  max-width: 18rem;
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  background: var(--panel);
+  border: 3px solid color-mix(in srgb, var(--sun) 60%, var(--ink));
+  box-shadow: 0 3px 0 var(--ink-dark);
+}
+
+.bank__points {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: bold;
+  color: var(--white);
+}
+
+.bank__worth {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
+
+.bank__convert[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 /* Shop: one row per skin. */
